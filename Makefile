@@ -3,12 +3,15 @@
 # $< (first prerequisite): refers to the first thing that is after the ":"
 # | if obj directory exists execute the code, otherwise create it in line 23
 CC = gcc
+ALTCC = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -pthread
 
 all: websockets
 # all is the default action in makefiles
 websockets: main.c 
 	$(CC) $(CFLAGS) $^ -o $@
+embedded: main.c
+	$(ALTCC) $(CFLAGS) $^ -o $@
 
 clean:
-	rm -f websockets
+	rm -f websockets embedded
