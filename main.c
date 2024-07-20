@@ -1,194 +1,131 @@
-/*
- *	File	: pc.c
- *
- *	Title	: Demo Producer/Consumer.
- *
- *	Short	: A solution to the producer consumer problem using
- *		pthreads.	
- *
- *	Long 	:
- *
- *	Author	: Andrae Muys
- *
- *	Date	: 18 September 1997
- *
- *	Revised	:
- */
-
-#include <pthread.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
+#include <libwebsockets.h>
 
-#define QUEUESIZE 10
-#define LOOP 20
-
-void *producer (void *args);
-void *consumer (void *args);
+static int interrupted;
+static struct lws *client_wsi;
 
 typedef struct {
-  int buf[QUEUESIZE];
-  long head, tail;
-  int full, empty;
-  pthread_mutex_t *mut;
-  pthread_cond_t *notFull, *notEmpty;
-} queue;
+    char symbol[50];
+    char api_key[100];
+} context_t;
 
-queue *queueInit (void);
-void queueDelete (queue *q);
-void queueAdd (queue *q, int in);
-void queueDel (queue *q, int *out);
+static void parse_price(const char *message) {
+    const char *price_key = "\"price\":";
+    char *price_start;
+    char *price_end;
+    double price;
 
-int main ()
-{
-  queue *fifo;
-  pthread_t pro, con;
+    // Find the start of the price value
+    price_start = strstr(message, price_key);
+    if (price_start) {
+        price_start += strlen(price_key);
 
-  fifo = queueInit ();
-  if (fifo ==  NULL) {
-    fprintf (stderr, "main: Queue Init failed.\n");
-    exit (1);
-  }
-  pthread_create (&pro, NULL, producer, fifo);
-  pthread_create (&con, NULL, consumer, fifo);
-  pthread_join (pro, NULL);
-  pthread_join (con, NULL);
-  queueDelete (fifo);
-
-  return 0;
-}
-
-void *producer (void *q)
-{
-  queue *fifo;
-  int i;
-
-  fifo = (queue *)q;
-
-  for (i = 0; i < LOOP; i++) {
-    pthread_mutex_lock (fifo->mut);
-    while (fifo->full) {
-      printf ("producer: queue FULL.\n");
-      pthread_cond_wait (fifo->notFull, fifo->mut);
+        // Convert the value to a double
+        price = strtod(price_start, &price_end);
+        if (price_start != price_end) {
+            printf("Apple stock price: %f\n", price);
+        } else {
+            printf("Price value is missing or invalid\n");
+        }
+    } else {
+        printf("Price key not found in the message\n");
     }
-    queueAdd (fifo, i);
-    pthread_mutex_unlock (fifo->mut);
-    pthread_cond_signal (fifo->notEmpty);
-    usleep (100000);
-  }
-  for (i = 0; i < LOOP; i++) {
-    pthread_mutex_lock (fifo->mut);
-    while (fifo->full) {
-      printf ("producer: queue FULL.\n");
-      pthread_cond_wait (fifo->notFull, fifo->mut);
+}
+
+static int callback_function(struct lws *wsi, enum lws_callback_reasons reason,
+                             void *user, void *in, size_t len) {
+    switch (reason) {
+        case LWS_CALLBACK_CLIENT_ESTABLISHED:
+            printf("Connection established\n");
+            {
+                context_t *ctx = (context_t *)user;
+                char msg[256];
+                sprintf(msg, "{\"type\":\"subscribe\",\"symbol\":\"%s\"}", ctx->symbol);
+                lws_write(wsi, (unsigned char *)msg, strlen(msg), LWS_WRITE_TEXT);
+            }
+            break;
+        case LWS_CALLBACK_CLIENT_RECEIVE:
+            {
+                char *received_message = (char *)in;
+                printf("Received: %s\n", received_message);
+
+                // Parse the received message to extract the price
+                parse_price(received_message);
+            }
+            break;
+        case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
+            printf("Connection error\n");
+            interrupted = 1;
+            break;
+        case LWS_CALLBACK_CLIENT_CLOSED:
+            printf("Connection closed\n");
+            interrupted = 1;
+            break;
+        default:
+            break;
     }
-    queueAdd (fifo, i);
-    pthread_mutex_unlock (fifo->mut);
-    pthread_cond_signal (fifo->notEmpty);
-    usleep (200000);
-  }
-  return (NULL);
+    return 0;
 }
 
-void *consumer (void *q)
-{
-  queue *fifo;
-  int i, d;
+static const struct lws_protocols protocols[] = {
+    {
+        "example-protocol",
+        callback_function,
+        sizeof(context_t), // User data size is context_t
+        65536,
+    },
+    { NULL, NULL, 0, 0 }
+};
 
-  fifo = (queue *)q;
+int main(void) {
+    context_t ctx = {
+        .symbol = "AAPL",
+        .api_key = "cq6i3lhr01qlbj5047ugcq6i3lhr01qlbj5047v0"
+    };
 
-  for (i = 0; i < LOOP; i++) {
-    pthread_mutex_lock (fifo->mut);
-    while (fifo->empty) {
-      printf ("consumer: queue EMPTY.\n");
-      pthread_cond_wait (fifo->notEmpty, fifo->mut);
+    struct lws_context_creation_info info;
+    struct lws_client_connect_info ccinfo;
+    struct lws_context *context;
+
+    memset(&info, 0, sizeof info);
+    info.port = CONTEXT_PORT_NO_LISTEN;
+    info.protocols = protocols;
+    info.gid = -1;
+    info.uid = -1;
+    info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+
+    context = lws_create_context(&info);
+    if (!context) {
+        fprintf(stderr, "lws_create_context failed\n");
+        return 1;
     }
-    queueDel (fifo, &d);
-    pthread_mutex_unlock (fifo->mut);
-    pthread_cond_signal (fifo->notFull);
-    printf ("consumer: recieved %d.\n", d);
-    usleep(200000);
-  }
-  for (i = 0; i < LOOP; i++) {
-    pthread_mutex_lock (fifo->mut);
-    while (fifo->empty) {
-      printf ("consumer: queue EMPTY.\n");
-      pthread_cond_wait (fifo->notEmpty, fifo->mut);
+
+    memset(&ccinfo, 0, sizeof(ccinfo));
+    ccinfo.context = context;
+    ccinfo.address = "ws.finnhub.io";
+    ccinfo.port = 443;
+    ccinfo.path = "/?token=cq6i3lhr01qlbj5047ugcq6i3lhr01qlbj5047v0"; // Replace with your Finnhub API key
+    ccinfo.host = lws_canonical_hostname(context);
+    ccinfo.origin = "origin";
+    ccinfo.protocol = protocols[0].name;
+    ccinfo.ssl_connection = LCCSCF_USE_SSL;
+    ccinfo.pwsi = &client_wsi;
+    ccinfo.userdata = &ctx; // Pass the context containing symbol and API key
+
+    lws_set_log_level(LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_INFO | LLL_DEBUG | LLL_PARSER | LLL_HEADER, NULL);
+
+    if (!lws_client_connect_via_info(&ccinfo)) {
+        fprintf(stderr, "lws_client_connect_via_info failed\n");
+        lws_context_destroy(context);
+        return 1;
     }
-    queueDel (fifo, &d);
-    pthread_mutex_unlock (fifo->mut);
-    pthread_cond_signal (fifo->notFull);
-    printf ("consumer: recieved %d.\n", d);
-    usleep (50000);
-  }
-  return (NULL);
-}
 
-/*
-  typedef struct {
-  int buf[QUEUESIZE];
-  long head, tail;
-  int full, empty;
-  pthread_mutex_t *mut;
-  pthread_cond_t *notFull, *notEmpty;
-  } queue;
-*/
+    while (!interrupted) {
+        lws_service(context, 1000);
+    }
 
-queue *queueInit (void)
-{
-  queue *q;
-
-  q = (queue *)malloc (sizeof (queue));
-  if (q == NULL) return (NULL);
-
-  q->empty = 1;
-  q->full = 0;
-  q->head = 0;
-  q->tail = 0;
-  q->mut = (pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
-  pthread_mutex_init (q->mut, NULL);
-  q->notFull = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
-  pthread_cond_init (q->notFull, NULL);
-  q->notEmpty = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
-  pthread_cond_init (q->notEmpty, NULL);
-	
-  return (q);
-}
-
-void queueDelete (queue *q)
-{
-  pthread_mutex_destroy (q->mut);
-  free (q->mut);	
-  pthread_cond_destroy (q->notFull);
-  free (q->notFull);
-  pthread_cond_destroy (q->notEmpty);
-  free (q->notEmpty);
-  free (q);
-}
-
-void queueAdd (queue *q, int in)
-{
-  q->buf[q->tail] = in;
-  q->tail++;
-  if (q->tail == QUEUESIZE)
-    q->tail = 0;
-  if (q->tail == q->head)
-    q->full = 1;
-  q->empty = 0;
-
-  return;
-}
-
-void queueDel (queue *q, int *out)
-{
-  *out = q->buf[q->head];
-
-  q->head++;
-  if (q->head == QUEUESIZE)
-    q->head = 0;
-  if (q->head == q->tail)
-    q->empty = 1;
-  q->full = 0;
-
-  return;
+    lws_context_destroy(context);
+    return 0;
 }

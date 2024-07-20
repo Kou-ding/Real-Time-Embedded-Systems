@@ -4,14 +4,15 @@
 # | if obj directory exists execute the code, otherwise create it in line 23
 CC = gcc
 ALTCC = arm-linux-gnueabihf-gcc
-CFLAGS = -Wall -pthread
+CFLAGS = -Wall -pthread 
 
 all: websockets
 # all is the default action in makefiles
 websockets: main.c 
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ -lwebsockets -lcrypto -lssl -lz
 embedded: main.c
 	$(ALTCC) $(CFLAGS) $^ -o $@
-
+test: test.c
+	$(CC) $(CFLAGS) $^ -o $@ -lwebsockets -lcrypto -lssl -lz
 clean:
-	rm -f websockets embedded
+	rm -f websockets embedded test
