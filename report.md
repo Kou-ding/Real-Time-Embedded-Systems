@@ -78,6 +78,14 @@ sudo make install
 ```
 Usually building it yourself guarantees that the latest version of the library is being utilized.
 
+#### 
+The C implementation helps us understand the fundamentals of a web socket connection. These are as follows:
+- Step 1
+    - 
+- Step 2
+    - 
+- Step 3
+    - 
 ### Sources
 - https://stackoverflow.com/questions/30904560/libwebsocket-client-example
 - https://finnhub.io/docs/api/library
