@@ -19,7 +19,7 @@
 //It resets the text colour to the terminal default
 #define RESET "\033[0m" //Reset
 
-// RX buffer size receiving the data from the websocket
+//RX buffer size receiving the data from the websocket
 #define EXAMPLE_RX_BUFFER_BYTES (100)
 
 //flags to determine the state of the websocket
@@ -29,18 +29,18 @@ static int writeable_flag = 0; //writeable flag
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
-static void INT_HANDLER(int signo) {
+static void INT_HANDLER(int signo){
     destroy_flag = 1;
 };
 
 // This struct is used to store the session data
 // NOT USED INSIDE THE CODE!!!!!!!!
-struct session_data {
+struct session_data{
     int fd;
 };
 
 // This struct is used to store the context and the websocket instance
-struct pthread_routine_tool {
+struct pthread_routine_tool{
     struct lws_context *context;
     struct lws *wsi;
 };
@@ -138,17 +138,19 @@ static int ws_service_callback(struct lws *wsi,
     return 0;
 };
 
-static struct lws_protocols protocols[] ={
+//This array defines the protocols used in the websocket
+static struct lws_protocols protocols[]={
 	{
-		"example-protocol",
-		ws_service_callback,
-		0,
-		EXAMPLE_RX_BUFFER_BYTES,
+		"example-protocol", //protocol name
+		ws_service_callback, //callback function
+		0, //user data size
+		EXAMPLE_RX_BUFFER_BYTES, //receive buffer size
 	},
-	{ NULL, NULL, 0, 0 } /* terminator */
+	{ NULL, NULL, 0, 0 } //terminator
 };
 
-struct sigaction {
+// This struct 
+struct sigaction{
     void (*sa_handler)(int);
     void (*sa_sigaction)(int, siginfo_t *, void *);
     sigset_t sa_mask;
@@ -169,12 +171,12 @@ int main(void){
     struct lws *wsi = NULL;
     struct lws_protocols protocol;
 
+    // Setting up the context creation info
     memset(&info, 0, sizeof info);
-
-    info.port = CONTEXT_PORT_NO_LISTEN;
-    info.protocols = protocols;
-    info.gid = -1;
-    info.uid = -1;
+    info.port = CONTEXT_PORT_NO_LISTEN; 
+    info.protocols = protocols; 
+    info.gid = -1; 
+    info.uid = -1; 
     info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
 
     //1st step: Send an http request to the server asking to open a connection
@@ -184,11 +186,13 @@ int main(void){
     char inputURL[300] = "ws.finnhub.io/?token=cqe0rvpr01qgmug3d06gcqe0rvpr01qgmug3d070";
     const char *urlProtocol, *urlTempPath;
 	char urlPath[300];
-    context = lws_create_context(&info);
-    printf(KRED"[Main] context created.\n"RESET);
 
-    if (context == NULL) {
-        printf(KRED"[Main] context is NULL.\n"RESET);
+    // Creating the context using the context creation info
+    context = lws_create_context(&info);
+    printf(KRED"[Main] Successful context creation.\n"RESET);
+
+    if (context == NULL){
+        printf(KRED"[Main] Context creation error: Context is NULL.\n"RESET);
         return -1;
     }
     struct lws_client_connect_info clientConnectionInfo;
@@ -203,31 +207,38 @@ int main(void){
     urlPath[0] = '/';
     strncpy(urlPath + 1, urlTempPath, sizeof(urlPath) - 2);
     urlPath[sizeof(urlPath)-1] = '\0';
+
+    //Setting up the client connection info
     clientConnectionInfo.port = 443;
     clientConnectionInfo.path = urlPath;
     clientConnectionInfo.ssl_connection = LCCSCF_USE_SSL | LCCSCF_ALLOW_SELFSIGNED | LCCSCF_SKIP_SERVER_CERT_HOSTNAME_CHECK;
-    
     clientConnectionInfo.host = clientConnectionInfo.address;
     clientConnectionInfo.origin = clientConnectionInfo.address;
     clientConnectionInfo.ietf_version_or_minus_one = -1;
     clientConnectionInfo.protocol = protocols[0].name;
-    printf("Testing %s\n\n", clientConnectionInfo.address);
-    printf("Connecting to %s://%s:%d%s \n\n", urlProtocol, 
-    clientConnectionInfo.address, clientConnectionInfo.port, urlPath);
 
+    // Print the connection info
+    printf("Testing %s\n\n", clientConnectionInfo.address);
+    printf("Connecting to %s://%s:%d%s \n\n", urlProtocol, clientConnectionInfo.address, clientConnectionInfo.port, urlPath);
+
+    // Create the websocket instance
     wsi = lws_client_connect_via_info(&clientConnectionInfo);
     if (wsi == NULL) {
-        printf(KRED"[Main] wsi create error.\n"RESET);
+        printf(KRED"[Main] Web socket instance creation error.\n"RESET);
         return -1;
     }
 
-    printf(KGRN"[Main] wsi create success.\n"RESET);
+    printf(KGRN"[Main] Successful web socket instance creation.\n"RESET);
 
+    // Loops until the destroy flag is set to 1 to maintain the websocket connection
+    // The destroy flag becomes 1 when the user presses Ctr+C
     while(!destroy_flag)
     {
+        //context: 
         lws_service(context, 50);
     }
 
+    // Destroy the websocket connection after breaking the loop above
     lws_context_destroy(context);
 
     return 0;

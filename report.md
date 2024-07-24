@@ -50,13 +50,13 @@ What we receive for not-currently traded markets is(Apple):
 The operating schedule of cryptocurrencies is 24/7 while normal stocks have certain market hours depending on the stock exchange they are on.
 
 Type: ping, signifies that the connection has been established though there are no market data to send.
-Type: trade, observes the market and based on the s:symbol it is provided includes useful information such as:
-- p:last price, 
-- v:volume,
-- t:unix milliseconds timestamp,
-- c:list of trade conditions
+Type: trade, observes the market and based on the s: symbol it is provided includes useful information such as:
+- p: last price, 
+- v: volume,
+- t: unix milliseconds timestamp,
+- c: list of trade conditions
 ### Pthreads | Part 2
-Now that we know how finnhub works and what kind of data it provides we need to do the same thing but in C and parallelize the process using pthreads.
+Now that we know how Finnhub works and what kind of data it provides we need to do the same thing but in C and parallelize the process using pthreads.
 
 #### Installing web sockets C library
 Then, we need to install a library that will help us make these necessary "GET" requests, effectively asking the current market's value for certain stocks and/or cryptos.
@@ -78,14 +78,21 @@ sudo make install
 ```
 Usually building it yourself guarantees that the latest version of the library is being utilized.
 
-#### 
+#### Understanding Web Sockets
 The C implementation helps us understand the fundamentals of a web socket connection. These are as follows:
 - Step 1
-    - 
+    - Send an http request to the server asking to open a connection
 - Step 2
-    - 
+    - The server sends a response to the client 101 Switching Protocols
 - Step 3
-    - 
+    - The channel is now open for bidirectional communication.
+
+In our case, we subscribe to certain Stocks and receive the same information as the Python script we tried earlier.
+
+### Results and Observations | Part 3
+
+
+
 ### Sources
 - https://stackoverflow.com/questions/30904560/libwebsocket-client-example
 - https://finnhub.io/docs/api/library
