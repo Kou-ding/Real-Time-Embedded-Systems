@@ -4,8 +4,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <libwebsockets.h>
-#include <asm-generic/siginfo.h>
-#include <libwebsockets/lws-misc.h>
 
 //Colours for terminal text formatting
 #define KGRN "\033[0;32;32m" //Green
@@ -20,7 +18,7 @@
 #define RESET "\033[0m" //Reset
 
 //RX buffer size receiving the data from the websocket
-#define EXAMPLE_RX_BUFFER_BYTES (100)
+#define EXAMPLE_RX_BUFFER_BYTES (200)
 
 //flags to determine the state of the websocket
 static int destroy_flag = 0; //destroy flag
@@ -29,9 +27,9 @@ static int writeable_flag = 0; //writeable flag
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
-static void INT_HANDLER(int signo){
+static void INT_HANDLER(int signal){
     destroy_flag = 1;
-};
+}
 
 // This struct is used to store the session data
 // NOT USED INSIDE THE CODE!!!!!!!!
@@ -77,13 +75,14 @@ static int websocket_write_back(struct lws *wsi_in, char *str, int str_size_in){
     free(out);
 
     return n;
-};
+}
 
 //A callback function that handles different websocket events
 static int ws_service_callback(struct lws *wsi, 
                                 enum lws_callback_reasons reason, 
                                 void *user,
-                                void *in, size_t len){
+                                void *in, 
+                                size_t len){
     switch (reason) {
         //This case is called when the connection is established
         case LWS_CALLBACK_CLIENT_ESTABLISHED:
@@ -114,8 +113,8 @@ static int ws_service_callback(struct lws *wsi,
             printf(KYEL"[Main Service] The websocket is writeable.\n"RESET);
             char* out = NULL;
             int sym_num = 2;
-            char symb_arr[4][5] = {"APPL\0", "AMZN\0", "BINANCE:BTCUSDT\0", "IC MARKETS:1\0"};
-            char str[50];
+            char symb_arr[4][16] = {"NVDA\0", "META\0", "BINANCE:BTCUSDT\0", "BINANCE:ETHUSDT\0"};
+            char str[100];
 
             for(int i = 0; i < 4; i++){
                 sprintf(str, "{\"type\":\"subscribe\",\"symbol\":\"%s\"}", symb_arr[i]);
@@ -136,7 +135,7 @@ static int ws_service_callback(struct lws *wsi,
     }
 
     return 0;
-};
+}
 
 //This array defines the protocols used in the websocket
 static struct lws_protocols protocols[]={
@@ -149,17 +148,8 @@ static struct lws_protocols protocols[]={
 	{ NULL, NULL, 0, 0 } //terminator
 };
 
-// This struct 
-struct sigaction{
-    void (*sa_handler)(int);
-    void (*sa_sigaction)(int, siginfo_t *, void *);
-    sigset_t sa_mask;
-    int sa_flags;
-    void (*sa_restorer)(void);
-};
-
 int main(void){
-    /* register the signal SIGINT handler */
+    // register the signal SIGINT handler
     struct sigaction act;
     act.sa_handler = INT_HANDLER;
     act.sa_flags = 0;
@@ -201,7 +191,7 @@ int main(void){
     if (lws_parse_uri(inputURL, &urlProtocol, &clientConnectionInfo.address,
 	    &clientConnectionInfo.port, &urlTempPath))
     {
-	    printf("Couldn't parse URL\n");
+	    printf("Couldn't parse the URL\n");
     }
 
     urlPath[0] = '/';
@@ -232,9 +222,8 @@ int main(void){
 
     // Loops until the destroy flag is set to 1 to maintain the websocket connection
     // The destroy flag becomes 1 when the user presses Ctr+C
-    while(!destroy_flag)
-    {
-        //context: 
+    while(!destroy_flag){
+        //
         lws_service(context, 50);
     }
 
