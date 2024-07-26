@@ -9,10 +9,10 @@ CFLAGS = -Wall -pthread
 all: websockets
 # all is the default action in makefiles
 websockets: main.c 
-	$(CC) $(CFLAGS) $^ -o $@ -lwebsockets -lcrypto -lssl -lz
+	$(CC) $(CFLAGS) $^ -o $@ -lwebsockets -lcrypto -lssl -lz -ljansson
 embedded: main.c
 	$(ALTCC) $(CFLAGS) $^ -o $@
 test: test.c
-	$(CC) $(CFLAGS) $^ -o $@ -lwebsockets -lcrypto -lssl -lz
+	$(CC) $(CFLAGS) $^ -o $@ 
 clean:
 	rm -f websockets embedded test

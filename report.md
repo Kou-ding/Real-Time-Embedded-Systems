@@ -81,13 +81,16 @@ Usually building it yourself guarantees that the latest version of the library i
 #### Understanding Web Sockets
 The C implementation helps us understand the fundamentals of a web socket connection. These are as follows:
 - Step 1
-    - Send an http request to the server asking to open a connection
+    - Send an HTTP request to the server asking to open a connection
 - Step 2
     - The server sends a response to the client 101 Switching Protocols
 - Step 3
     - The channel is now open for bidirectional communication.
 
-In our case, we subscribe to certain Stocks and receive the same information as the Python script we tried earlier.
+ Steps 1 and 2 are considered the handshake procedure and in our case, we subscribe to certain Stocks and receive the same information as the Python script we tried earlier.
+
+#### Code structure
+
 
 ### Results and Observations | Part 3
 
