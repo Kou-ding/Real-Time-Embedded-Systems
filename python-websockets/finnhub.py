@@ -17,11 +17,11 @@ def on_close(ws, close_status_code, close_msg):
 
 # determines program behaviour when the websocket has successfully opened
 def on_open(ws):
-    ws.send('{"type":"subscribe","symbol":"TM"}') #Toyota
+    #ws.send('{"type":"subscribe","symbol":"TM"}') #Toyota
     ws.send('{"type":"subscribe","symbol":"NVDA"}') #Nvidia
-    ws.send('{"type":"subscribe","symbol":"AMD"}') #AMD
+    #ws.send('{"type":"subscribe","symbol":"AMD"}') #AMD
     ws.send('{"type":"subscribe","symbol":"GOOGL"}') #Google
-    ws.send('{"type":"subscribe","symbol":"AAPL"}') #Apple
+    #ws.send('{"type":"subscribe","symbol":"AAPL"}') #Apple
     ws.send('{"type":"subscribe","symbol":"BINANCE:BTCUSDT"}') #Bitcoin
     ws.send('{"type":"subscribe","symbol":"BINANCE:ETHUSDT"}') #Ethereum
 

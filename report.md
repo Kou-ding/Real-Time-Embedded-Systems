@@ -1,6 +1,8 @@
 Invidia, Apple, Tesla, Amazon
 Bitcoin, Ethereum, Monero
 
+Log all past stock exchanges in a separate file for each stock respectively.
+
 Every minute compute the (candlestick):
 - first value
 - last value
