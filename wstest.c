@@ -24,12 +24,12 @@
 //RX buffer size receiving the data from the websocket
 #define EXAMPLE_RX_BUFFER_BYTES (1000)
 
+//Number of threads which is also the number of symbols
+#define NUM_THREADS 4
 //Queue size
 #define QUEUESIZE 10
 //Number of loops
 #define LOOP 10
-//Number of threads which is also the number of symbols
-#define NUM_THREADS 4
 
 //flags to determine the state of the websocket
 static int destroy_flag = 0; //destroy flag
@@ -163,14 +163,16 @@ int main(void){
     while(destroy_flag==0){
         // Service the WebSocket
         lws_service(context, 500);
-        // Sleep to save CPU usage
-        //sleep(3);
+
+        // Print the flags status
         printf(KBRN"Flags-Status\n"RESET);
         printf("Connection flag status: %d\n", connection_flag);
         printf("Destroy flag status: %d\n", destroy_flag);
         printf("Writeable flag status: %d\n", writeable_flag);
-    }
 
+        // Sleep to save CPU usage
+        //sleep(3);
+    }
 
     // Destroy the websocket connection
     lws_context_destroy(context);

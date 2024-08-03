@@ -1,6 +1,14 @@
-Invidia, Apple, Tesla, Amazon
-Bitcoin, Ethereum, Monero
+### Introduction
+In this assignment, we are going to be opening a WebSocket connection to receive and process stock and crypto data. We are going to be keeping track of the following stocks:
+- Invidia,
+- Google
+and the following crypto:
+- Bitcoin,
+- Ethereum.
 
+Stocks and crypto have differing operating hours and that is why I chose to incorporate, in addition to stocks that are exchanged on normal stock market hours, two very popular cryptocurrencies that are being exchanged 24/7. This setup will provide us with a constant influx of sufficient data to process.
+
+### Assignment Requirements
 Log all past stock exchanges in a separate file for each stock respectively.
 
 Every minute compute the (candlestick):
@@ -36,13 +44,13 @@ deactivate
 # To run the code
 python3 finnhub.py
 ```
-What we receive for currently traded markets is(Bitcoin):
+What we receive for currently traded markets (in our case: Bitcoin) is:
 ```
 ++Rcv raw: b'\x81~\x03\x0f{"data":[{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.01559},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.00008},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.0001},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.02423},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886261,"v":0.00011},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886418,"v":0.00084},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00746},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00149},{"c":null,"p":66972.78,"s":"BINANCE:BTCUSDT","t":1721555886860,"v":0.0208},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886950,"v":0.00122}],"type":"trade"}'
 
 ++Rcv decoded: fin=1 opcode=1 data=b'{"data":[{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.01559},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.00008},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.0001},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.02423},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886261,"v":0.00011},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886418,"v":0.00084},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00746},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00149},{"c":null,"p":66972.78,"s":"BINANCE:BTCUSDT","t":1721555886860,"v":0.0208},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886950,"v":0.00122}],"type":"trade"}
 ```
-What we receive for not-currently traded markets is(Apple):
+What we receive for not-currently traded markets (in our case: Apple) is:
 ```
 ++Rcv raw: b'\x81\x0f{"type":"ping"}'
 
@@ -51,17 +59,22 @@ What we receive for not-currently traded markets is(Apple):
 ```
 The operating schedule of cryptocurrencies is 24/7 while normal stocks have certain market hours depending on the stock exchange they are on.
 
-Type: ping, signifies that the connection has been established though there are no market data to send.
-Type: trade, observes the market and based on the s: symbol it is provided includes useful information such as:
+>Type: ping, signifies that the connection has been established though there are no market data to send.
+
+>Type: trade, contains market data relevant to the symbols we subscribe to
+
+The trade information being provided has this form:
+- s: symbol
 - p: last price, 
 - v: volume,
 - t: unix milliseconds timestamp,
 - c: list of trade conditions
+
 ### Pthreads | Part 2
 Now that we know how Finnhub works and what kind of data it provides we need to do the same thing but in C and parallelize the process using pthreads.
 
 #### Installing web sockets C library
-Then, we need to install a library that will help us make these necessary "GET" requests, effectively asking the current market's value for certain stocks and/or cryptos.
+Then, we need to install a library that will help us subscribe to certain market symbols, effectively listening to the current market's activity for certain stocks and/or cryptos.
 For Debian-based distributions, the command to install the WebSocket library is as follows:
 ```bash
 #to get the library via your distro's package manager
@@ -89,10 +102,11 @@ The C implementation helps us understand the fundamentals of a web socket connec
 - Step 3
     - The channel is now open for bidirectional communication.
 
- Steps 1 and 2 are considered the handshake procedure and in our case, we subscribe to certain Stocks and receive the same information as the Python script we tried earlier.
+Steps 1 and 2 are considered the handshake procedure and in our case, we subscribe to certain Stocks and receive the same information as the Python script we tried earlier.
 
-#### Code structure
-
+#### Libwebsocket code
+Let's translate the previously stated WebSocket theory into actual c code.
+The gist of the program's logic is within the WebSocket service callback function that gets called on different occasions inside the  
 
 ### Results and Observations | Part 3
 

@@ -21,26 +21,22 @@
 //It resets the text colour to the terminal default
 #define RESET "\033[0m" //Reset
 
-//RX buffer size receiving the data from the websocket
-#define EXAMPLE_RX_BUFFER_BYTES (1000)
-
+//Number of threads which is also the number of symbols
+#define NUM_THREADS 4
 //Queue size
 #define QUEUESIZE 10
 //Number of loops
 #define LOOP 10
-//Number of threads which is also the number of symbols
-#define NUM_THREADS 4
 
 //flags to determine the state of the websocket
 static int destroy_flag = 0; //destroy flag
 static int connection_flag = 0; //connection flag
 static int writeable_flag = 0; //writeable flag
 
-// Timer to prevent spamming the console with messages
+// Calculate candlestick timer 60s
 static time_t last_message_time = 0;
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
-// This is used to close the websocket connection and free the memory
 static void interrupt_handler(int signal);
 // This function sends a message to the websocket
 static void websocket_write_back(struct lws *wsi_in);
@@ -70,7 +66,10 @@ static struct lws_protocols protocols[]={
 		"wss", //protocol name
 		ws_service_callback, //callback function
 		0, //user data size
-		EXAMPLE_RX_BUFFER_BYTES, //receive buffer size
+		0, //receive buffer size *VERY IMPORTANT TO BE 0*, didn't work otherwise
+        //any other value terminated the connection sooner than expected without going into 
+        //the cases: LWS_CALLBACK_CLIENT_CONNECTION_ERROR and LWS_CALLBACK_CLOSED
+        //with the connection flag always being 1 I couldn't even attempt to reconnect
 	},
 	{ NULL, NULL, 0, 0 } //terminator
 };
