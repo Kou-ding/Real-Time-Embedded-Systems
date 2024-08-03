@@ -12,7 +12,9 @@ websockets: main.c
 	$(CC) $(CFLAGS) $^ -o $@ -lwebsockets -lcrypto -lssl -lz -ljansson
 embedded: main.c
 	$(ALTCC) $(CFLAGS) $^ -o $@
-test: test.c
-	$(CC) $(CFLAGS) $^ -o $@ 
+wstest: wstest.c
+	$(CC) $(CFLAGS) $^ -o $@ -lwebsockets -lcrypto -lssl -lz -ljansson
+ptest: ptest.c
+	$(CC) $(CFLAGS) $^ -o $@
 clean:
-	rm -f websockets embedded test
+	rm -f websockets embedded wstest ptest

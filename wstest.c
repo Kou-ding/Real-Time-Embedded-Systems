@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <pthread.h>
+#include <time.h>
 
 //Colours for terminal text formatting
 #define KGRN "\033[0;32;32m" //Green
@@ -34,6 +35,9 @@
 static int destroy_flag = 0; //destroy flag
 static int connection_flag = 0; //connection flag
 static int writeable_flag = 0; //writeable flag
+
+// Timer to prevent spamming the console with messages
+static time_t last_message_time = 0;
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
@@ -66,7 +70,10 @@ static struct lws_protocols protocols[]={
 		"example-protocol", //protocol name
 		ws_service_callback, //callback function
 		0, //user data size
-		EXAMPLE_RX_BUFFER_BYTES, //receive buffer size
+		0, //receive buffer size *VERY IMPORTANT TO BE 0*, didn't work otherwise
+        //any other value terminated the connection sooner than expected without going into 
+        //the cases: LWS_CALLBACK_CLIENT_CONNECTION_ERROR and LWS_CALLBACK_CLOSED
+        //with the connection flag always being 1 I couldn't even attempt to reconnect
 	},
 	{ NULL, NULL, 0, 0 } //terminator
 };
@@ -98,6 +105,9 @@ int main(void){
     info.gid = -1; 
     info.uid = -1; 
     info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+    info.max_http_header_pool = 1024; // Increase if necessary
+    info.pt_serv_buf_size = 4096; // Default is 4096 bytes, increase as needed
+    //info.pt_serv_buf_size = 16384; // Increase buffer size to 16 KB
 
     // The URL of the websocket
     char inputURL[300] = "ws.finnhub.io/?token=cqe0rvpr01qgmug3d06gcqe0rvpr01qgmug3d070";
@@ -153,10 +163,15 @@ int main(void){
     // The destroy flag becomes 1 when the user presses Ctr+C
     while(destroy_flag==0){
         // Service the WebSocket
-        lws_service(context, 100);
+        lws_service(context, 500);
         // Sleep to save CPU usage
         //sleep(3);
+        printf(KBRN"Flags-Status\n"RESET);
+        printf("Connection flag status: %d\n", connection_flag);
+        printf("Destroy flag status: %d\n", destroy_flag);
+        printf("Writeable flag status: %d\n", writeable_flag);
     }
+
 
     // Destroy the websocket connection
     lws_context_destroy(context);
@@ -196,6 +211,7 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
         //This case is called when the client receives a message from the websocket
         case LWS_CALLBACK_CLIENT_RECEIVE:
             printf(KCYN_L"[Main Service] The Client received a message:%s\n"RESET, (char *)in);
+            
             // Parse the received message
             json_t *root;
             json_error_t error;
@@ -282,192 +298,7 @@ void print_latest_trades() {
     printf(KBRN"Latest Trades:\n"RESET);
     for (int i = 0; i < NUM_THREADS; i++) {
         printf("%s - Price: %.2f, Volume: %.8f, Timestamp: %lld\n", 
-               trades[i].symbol, trades[i].price, trades[i].volume, trades[i].timestamp);
+            trades[i].symbol, trades[i].price, trades[i].volume, trades[i].timestamp);
     }
     printf("\n");
-}
-
-/*
- *	File	: pc.c
- *
- *	Title	: Demo Producer/Consumer.
- *
- *	Short	: A solution to the producer consumer problem using
- *		pthreads.	
- *
- *	Long 	:
- *
- *	Author	: Andrae Muys
- *
- *	Date	: 18 September 1997
- *
- *	Revised	:
- */
-
-#include <pthread.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-
-#define QUEUESIZE 10
-#define LOOP 10
-
-void *producer (void *args);
-void *consumer (void *args);
-int x = 0;
-// The queue and its functions
-typedef struct {
-  int buf[QUEUESIZE];
-  long head, tail;
-  int full, empty;
-  pthread_mutex_t *mut;
-  pthread_cond_t *notFull, *notEmpty;
-} queue;
-
-queue *queueInit (void);
-void queueDelete (queue *q);
-void queueAdd (queue *q, int in);
-void queueDel (queue *q, int *out);
-
-// main
-int main (){
-  queue *fifo;
-
-  // Number of threads
-  int num_threads = 4;
-  pthread_t pro[num_threads], con[num_threads];
-
-  fifo = queueInit ();
-  if (fifo ==  NULL) {
-    fprintf (stderr, "main: Queue Init failed.\n");
-    exit (1);
-  }
-  // Create the producer and consumer threads
-  for (int i = 0; i < num_threads; i++) {
-    pthread_create (&pro[i], NULL, producer, fifo);
-  }
-  for(int i = 0; i < num_threads; i++) {
-    pthread_create (&con[i], NULL, consumer, fifo);
-  }
-  // Wait for the threads to finish
-  for (int i = 0; i < num_threads; i++) {
-    pthread_join(pro[i], NULL);
-  }
-  for (int i = 0; i < num_threads; i++) {
-    pthread_join(con[i], NULL);
-  }
-
-  queueDelete (fifo);
-  pthread_exit(NULL);
-  return 0;
-}
-
-void *producer (void *q){
-  queue *fifo;
-  int i;
-
-  fifo = (queue *)q;
-    ////
-    for (i = 0; i < LOOP; i++) {
-        pthread_mutex_lock (fifo->mut);
-        x=x+1;
-        printf("Hello World %d\n",x);
-        pthread_mutex_unlock (fifo->mut);
-    }
-    ////
-    for (i = 0; i < LOOP; i++) {
-    pthread_mutex_lock (fifo->mut);
-    while (fifo->full) {
-        printf ("producer: queue FULL.\n");
-        pthread_cond_wait (fifo->notFull, fifo->mut);
-    }
-    queueAdd (fifo, i);
-    pthread_mutex_unlock (fifo->mut);
-    pthread_cond_signal (fifo->notEmpty);
-    printf ("producer: sent %d.\n", i);
-    }
-
-    return (NULL);
-}
-
-void *consumer (void *q){
-    queue *fifo;
-    int i, d;
-
-    fifo = (queue *)q;
-    ////
-    for (i = 0; i < LOOP; i++) {
-        pthread_mutex_lock (fifo->mut);
-        x=x+1;
-        printf("Hello Sword %d\n",x);
-        pthread_mutex_unlock (fifo->mut);
-    }
-    ////
-    for (i = 0; i < LOOP; i++) {
-    pthread_mutex_lock (fifo->mut);
-    while (fifo->empty) {
-        printf ("consumer: queue EMPTY.\n");
-        pthread_cond_wait (fifo->notEmpty, fifo->mut);
-    }
-    queueDel (fifo, &d);
-    pthread_mutex_unlock (fifo->mut);
-    pthread_cond_signal (fifo->notFull);
-    printf ("consumer: recieved %d.\n", d);
-  }
-  
-  return (NULL);
-}
-
-queue *queueInit (void){
-  queue *q;
-  q = (queue *)malloc (sizeof (queue));
-  if (q == NULL) return (NULL);
-
-  q->empty = 1;
-  q->full = 0;
-  q->head = 0;
-  q->tail = 0;
-  q->mut = (pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
-  pthread_mutex_init (q->mut, NULL);
-  q->notFull = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
-  pthread_cond_init (q->notFull, NULL);
-  q->notEmpty = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
-  pthread_cond_init (q->notEmpty, NULL);
-	
-  return (q);
-}
-
-void queueDelete (queue *q){
-  pthread_mutex_destroy (q->mut);
-  free (q->mut);
-  pthread_cond_destroy (q->notFull);
-  free (q->notFull);
-  pthread_cond_destroy (q->notEmpty);
-  free (q->notEmpty);
-  free (q);
-}
-
-void queueAdd (queue *q, int in){
-  q->buf[q->tail] = in;
-  q->tail++;
-  if (q->tail == QUEUESIZE)
-    q->tail = 0;
-  if (q->tail == q->head)
-    q->full = 1;
-  q->empty = 0;
-
-  return;
-}
-
-void queueDel (queue *q, int *out){
-  *out = q->buf[q->head];
-
-  q->head++;
-  if (q->head == QUEUESIZE)
-    q->head = 0;
-  if (q->head == q->tail)
-    q->empty = 1;
-  q->full = 0;
-
-  return;
 }

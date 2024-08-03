@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <pthread.h>
+#include <time.h>
 
 //Colours for terminal text formatting
 #define KGRN "\033[0;32;32m" //Green
@@ -34,6 +35,9 @@
 static int destroy_flag = 0; //destroy flag
 static int connection_flag = 0; //connection flag
 static int writeable_flag = 0; //writeable flag
+
+// Timer to prevent spamming the console with messages
+static time_t last_message_time = 0;
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
@@ -63,7 +67,7 @@ void print_latest_trades();
 //This array defines the protocols used in the websocket
 static struct lws_protocols protocols[]={
 	{
-		"example-protocol", //protocol name
+		"wss", //protocol name
 		ws_service_callback, //callback function
 		0, //user data size
 		EXAMPLE_RX_BUFFER_BYTES, //receive buffer size
@@ -71,6 +75,28 @@ static struct lws_protocols protocols[]={
 	{ NULL, NULL, 0, 0 } //terminator
 };
 
+// The queue and its functions
+typedef struct {
+  TradeData buf[QUEUESIZE];
+  long head, tail;
+  int full, empty;
+  pthread_mutex_t *mut;
+  pthread_cond_t *notFull, *notEmpty;
+} queue;
+//Initialize the queue
+queue *queueInit (void);
+//Delete the queue
+void queueDelete (queue *q);
+//Add element to the queue
+void queueAdd (queue *q, TradeData in);
+//Delete element from the queue
+void queueDel (queue *q, TradeData *out);
+//Function of the producer
+void *producer (int thread_id);
+//Function of the consumer
+void *consumer(int thread_id);
+// Global queue for each stock symbol
+queue *queues[NUM_THREADS];
 
 int main(void){
     // Initialize the trades array with symbols
@@ -98,6 +124,9 @@ int main(void){
     info.gid = -1; 
     info.uid = -1; 
     info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+    info.max_http_header_pool = 1024; // Increase if necessary
+    //info.pt_serv_buf_size = 4096; // Default is 4096 bytes, increase as needed
+    info.pt_serv_buf_size = 16384; // Increase buffer size to 16 KB
 
     // The URL of the websocket
     char inputURL[300] = "ws.finnhub.io/?token=cqe0rvpr01qgmug3d06gcqe0rvpr01qgmug3d070";
@@ -146,18 +175,51 @@ int main(void){
         printf(KRED"[Main] Web socket instance creation error.\n"RESET);
         return -1;
     }
+    printf(KGRN"[Main] Successful web socket instance creation.\n"RESET);
 
-    printf(KGRN"[Main] Successful web socket instance creation.\n"RESET);   
+    // Initialize queues for each symbol   
+    for (int i = 0; i < NUM_THREADS; i++) {
+        queues[i] = queueInit();
+        if (queues[i] == NULL) {
+            fprintf(stderr, "Queue initialization failed for %s.\n", trades[i].symbol);
+            exit(1);
+        }
+    }
+    // Create producer and consumer threads for each symbol
+    pthread_t pro[NUM_THREADS], con[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_create(&pro[i], NULL, producer, queues[i]);
+        pthread_create(&con[i], NULL, consumer, queues[i]);
+    }
 
     // Loops until the destroy flag is set to 1 to maintain the websocket connection
     // The destroy flag becomes 1 when the user presses Ctr+C
     while(destroy_flag==0){
         // Service the WebSocket
         lws_service(context, 500);
+
+        // Print the flags status
+        printf(KBRN"Flags-Status\n"RESET);
+        printf("Connection flag status: %d\n", connection_flag);
+        printf("Destroy flag status: %d\n", destroy_flag);
+        printf("Writeable flag status: %d\n", writeable_flag);
+
         // Sleep to save CPU usage
         //sleep(3);
     }
 
+    // Wait for the threads to finish
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_join(pro[i], NULL);
+        pthread_join(con[i], NULL);
+    }
+    // Destroy the queues
+    for (int i = 0; i < NUM_THREADS; i++) {
+        queueDelete(queues[i]);
+    }
+    // Exit the pthreads
+    pthread_exit(NULL);
+    
     // Destroy the websocket connection
     lws_context_destroy(context);
 
@@ -196,6 +258,16 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
         //This case is called when the client receives a message from the websocket
         case LWS_CALLBACK_CLIENT_RECEIVE:
             printf(KCYN_L"[Main Service] The Client received a message:%s\n"RESET, (char *)in);
+            // Get the current time
+            time_t current_time = time(NULL);
+
+            // Check if 5 seconds have passed since the last message
+            if (difftime(current_time, last_message_time) < 5) {
+                // If not enough time has passed, break out of the case
+                break;
+            }
+            // Update the last message received time
+            last_message_time = current_time;
             // Parse the received message
             json_t *root;
             json_error_t error;
@@ -282,7 +354,141 @@ void print_latest_trades() {
     printf(KBRN"Latest Trades:\n"RESET);
     for (int i = 0; i < NUM_THREADS; i++) {
         printf("%s - Price: %.2f, Volume: %.8f, Timestamp: %lld\n", 
-               trades[i].symbol, trades[i].price, trades[i].volume, trades[i].timestamp);
+            trades[i].symbol, trades[i].price, trades[i].volume, trades[i].timestamp);
     }
     printf("\n");
+}
+//Producer and consumer functions
+void *producer(int thread_id){
+    queue *fifo;
+    fifo = queues[thread_id];
+
+    // instead of a while there can be a for loop that runs for a certain number of iterations
+    // simulating production rate
+    while (!destroy_flag) {
+        TradeData in;
+        pthread_mutex_lock(fifo->mut);
+        while (fifo->full) {
+            pthread_cond_wait(fifo->notFull, fifo->mut);
+        }
+        // this in has to be specified
+        queueAdd(fifo, in);
+        pthread_mutex_unlock(fifo->mut);
+        pthread_cond_signal(fifo->notEmpty);
+    }
+
+    return NULL;
+}
+void *consumer(int thread_id){
+    queue *fifo;
+    fifo = queues[thread_id];
+
+    TradeData out;
+
+    FILE *file;
+    char filename[256];
+    snprintf(filename, sizeof(filename), "trade_data_%s.txt", trades[thread_id].symbol);
+    file = fopen(filename, "a");
+    if (!file) {
+        fprintf(stderr, "Failed to open file for %s.\n", trades[thread_id].symbol);
+        pthread_exit(NULL);
+    }
+
+    time_t start_time = time(NULL);
+
+    // instead of a while there can be a for loop that runs for a certain number of iterations
+    // simulating consumption rate
+    while (!destroy_flag) {
+        pthread_mutex_lock(fifo->mut);
+        while (fifo->empty) {
+            pthread_cond_wait(fifo->notEmpty, fifo->mut);
+        }
+        queueDel(fifo, &out);
+        pthread_mutex_unlock(fifo->mut);
+        pthread_cond_signal(fifo->notFull);
+
+        fprintf(file, "Symbol: %s, Price: %.2f, Volume: %.2f, Timestamp: %lld\n", out.symbol, out.price, out.volume, out.timestamp);
+        time_t current_time = time(NULL);
+        if (difftime(current_time, start_time) >= 60) {
+            // Calculate metrics (e.g., VWAP, Total Volume, etc.) here based on collected data.
+            // Compute statistics every minute
+            int count = 0;
+            double total_price = 0;
+            double total_volume = 0;
+
+            pthread_mutex_lock(fifo->mut);
+            for (int i = fifo->head; i != fifo->tail; i = (i + 1) % QUEUESIZE) {
+                total_price += fifo->buf[i].price;
+                total_volume += fifo->buf[i].volume;
+                count++;
+            }
+            pthread_mutex_unlock(fifo->mut);
+
+            double avg_price = total_price / count;
+
+            printf("Symbol: %s, Avg Price: %f, Total Volume: %f\n", 
+                    out.symbol, avg_price, total_volume);
+            // Reset the start time for the next minute.
+            start_time = current_time;
+        }
+    }
+
+    fclose(file);
+
+    return NULL;
+}
+//Queue functions
+queue *queueInit (void){
+    queue *q;
+    q = (queue *)malloc (sizeof (queue));
+    if (q == NULL){
+        return (NULL);
+    }
+    q->empty = 1;
+    q->full = 0;
+    q->head = 0;
+    q->tail = 0;
+    q->mut = (pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
+    pthread_mutex_init (q->mut, NULL);
+    q->notFull = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
+    pthread_cond_init (q->notFull, NULL);
+    q->notEmpty = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
+    pthread_cond_init (q->notEmpty, NULL);
+
+    return (q);
+}
+void queueDelete (queue *q){
+    pthread_mutex_destroy (q->mut);
+    free (q->mut);
+    pthread_cond_destroy (q->notFull);
+    free (q->notFull);
+    pthread_cond_destroy (q->notEmpty);
+    free (q->notEmpty);
+    free (q);
+}
+void queueAdd (queue *q, TradeData in){
+    q->buf[q->tail] = in;
+    q->tail++;
+    if (q->tail == QUEUESIZE){
+        q->tail = 0;
+    }
+    if (q->tail == q->head){
+        q->full = 1;
+    }
+    q->empty = 0;
+
+    return;
+}
+void queueDel (queue *q, TradeData *out){
+    *out = q->buf[q->head];
+    q->head++;
+    if (q->head == QUEUESIZE){
+        q->head = 0;
+    }
+    if (q->head == q->tail){
+        q->empty = 1;
+    }
+    q->full = 0;
+
+    return;
 }
