@@ -41,7 +41,7 @@ static time_t last_message_time = 0;
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
-static void iterrupt_handler(int signal);
+static void interrupt_handler(int signal);
 // This function sends a message to the websocket
 static void websocket_write_back(struct lws *wsi_in);
 //A callback function that handles different websocket events
@@ -107,7 +107,7 @@ int main(void){
 
     // register the signal SIGINT handler
     struct sigaction act;
-    act.sa_handler = iterrupt_handler;
+    act.sa_handler = interrupt_handler;
     act.sa_flags = 0;
     sigemptyset(&act.sa_mask);
     sigaction( SIGINT, &act, 0);
