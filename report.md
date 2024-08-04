@@ -23,7 +23,7 @@ The report should be 4 pages containing:
 - the implementation method
 - a diagram of the time differences
 - a diagram of the percentage of the time the CPU remains idle 
-- comments and results that show that the program can function for days writing data without losses and without stopping if something happens to the connection or the 
+- comments and results that show that the program can function for days writing data without losses and without stopping if something happens to the connection or the network.
 
 ### WebSockets | Part 1
 
@@ -106,10 +106,28 @@ Steps 1 and 2 are considered the handshake procedure and in our case, we subscri
 
 #### Libwebsocket code
 Let's translate the previously stated WebSocket theory into actual c code.
-The gist of the program's logic is within the WebSocket service callback function that gets called on different occasions inside the  
+The gist of the program's logic is within the WebSocket service callback function. A callback function is designed to be called by another function. In our case, this stands true as it gets called on different occasions:
+- When creating the context of the connection the protocols array is passed as a parameter. This array contains, among others, the callback function. 
+- And every time the main while loop comes around in order for the WebSocket to continue serving its purpose. Specifically, this function utilizes it: lws_service(context, 500).
 
-### Results and Observations | Part 3
+The aforementioned callback function contains all the possible cases a connection needs:
+- The Client established a connection
+- Connection error
+- Connection closed
+- The Client received a message
+- Client writeable
 
+When the connection is established the callback function runs the "connection established case". This changes a public flag to let us know of the connection's updated state and also prints it for the user to see.
+
+Before receiving a message the program must first succeed in a handshake with the server. This is done inside the Client writeable case where we pass on the subscription symbols to the server to then later receive all the relevant information. 
+
+After all that is done, we can now move on to receiving the message via the "the client received a message" case of the callback function. Here we analyze the JSON formatted message that is sent through the WebSocket connection to extract the data and log it inside a txt file. The candlestick is also calculated here.
+
+
+### Results | Part 3
+
+### Observations | Part 4
+When setting up the protocol array I originally set the buffer size at 1000. This allowed me to read the entirety of the messages being sent, but once in a while, the connection would terminate without any obvious, for me, reason. Setting the buffer to 0 resolved the issue.
 
 
 ### Sources
