@@ -226,7 +226,7 @@ int main(void){
 }
 
 
-static void iterrupt_handler(int signal){
+static void interrupt_handler(int signal){
     destroy_flag = 1;
 }
 

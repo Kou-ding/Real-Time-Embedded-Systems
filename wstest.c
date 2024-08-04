@@ -24,6 +24,9 @@
 //RX buffer size receiving the data from the websocket
 #define EXAMPLE_RX_BUFFER_BYTES (1000)
 
+// Candlestick timer
+time_t start_time;
+
 //Number of threads which is also the number of symbols
 #define NUM_THREADS 4
 //Queue size
@@ -36,8 +39,14 @@ static int destroy_flag = 0; //destroy flag
 static int connection_flag = 0; //connection flag
 static int writeable_flag = 0; //writeable flag
 
-// Timer to prevent spamming the console with messages
-static time_t last_message_time = 0;
+// Initialize the candlestick variables
+int count[NUM_THREADS];
+double avg_price[NUM_THREADS];
+double total_volume[NUM_THREADS];
+double min_price[NUM_THREADS];
+double max_price[NUM_THREADS];
+double open_price[NUM_THREADS];
+double close_price[NUM_THREADS];
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
@@ -84,6 +93,13 @@ int main(void){
     strcpy(trades[1].symbol, "GOOGL");
     strcpy(trades[2].symbol, "BINANCE:BTCUSDT");
     strcpy(trades[3].symbol, "BINANCE:ETHUSDT");
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        count[i] = 0;
+        min_price[i] = 0;
+        max_price[i] = 0;
+        total_volume[i] = 0;
+    }
 
     // register the signal SIGINT handler
     struct sigaction act;
@@ -158,6 +174,9 @@ int main(void){
 
     printf(KGRN"[Main] Successful web socket instance creation.\n"RESET);   
 
+    // Candlestick timer
+    start_time = time(NULL);
+
     // Loops until the destroy flag is set to 1 to maintain the websocket connection
     // The destroy flag becomes 1 when the user presses Ctr+C
     while(destroy_flag==0){
@@ -177,11 +196,21 @@ int main(void){
     // Destroy the websocket connection
     lws_context_destroy(context);
 
+    // Clear the contents of the log files
+    for (int i = 0; i < NUM_THREADS; i++) {
+        char trade_filename[50];
+        char candlestick_filename[50];
+        snprintf(trade_filename, sizeof(trade_filename), "logs/%s.txt", trades[i].symbol);
+        snprintf(candlestick_filename, sizeof(candlestick_filename), "candlesticks/%s_candlestick.txt", trades[i].symbol);
+        clear_file(trade_filename);
+        clear_file(candlestick_filename);
+    }
+
     return 0;
 }
 
 
-static void iterrupt_handler(int signal){
+static void interrupt_handler(int signal){
     destroy_flag = 1;
 }
 
@@ -232,14 +261,14 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
             json_t *value;
             json_array_foreach(data, index, value) {
                 const char *symbol = json_string_value(json_object_get(value, "s"));
-                double price = json_real_value(json_object_get(value, "p"));
-                double volume = json_real_value(json_object_get(value, "v"));
+                double price = json_number_value(json_object_get(value, "p"));
+                double volume = json_number_value(json_object_get(value, "v"));
                 long long timestamp = json_integer_value(json_object_get(value, "t"));
                 update_trade_data(symbol, price, volume, timestamp);
             }
 
             // Print the latest trades
-            print_latest_trades();
+            //print_latest_trades();
 
             json_decref(root);
             break;
@@ -291,7 +320,45 @@ void update_trade_data(const char* symbol, double price, double volume, long lon
             trades[i].price = price;
             trades[i].volume = volume;
             trades[i].timestamp = timestamp;
-            return;
+
+            // Print the trade data inside a txt file
+            write_trade_to_file(symbol, price, volume, timestamp);
+            
+            time_t current_time = time(NULL);
+
+            // Update the candlestick data
+            if (count[i] == 0) {
+                open_price[i] = trades[i].price;
+            }
+            else {
+                if (trades[i].price < min_price[i] || min_price[i] == 0) {
+                    min_price[i] = trades[i].price;
+                    min_price[i] = trades[i].price;
+                    max_price[i] = trades[i].price;
+                }
+                if (trades[i].price > max_price[i]) {
+                    max_price[i] = trades[i].price;
+                }
+            }
+            total_volume[i] += trades[i].volume;
+            avg_price[i] = (avg_price[i] * count[i] + trades[i].price) / (count[i] + 1);
+            count[i]++;
+            close_price[i] = trades[i].price;
+
+            if (difftime(current_time, start_time) > 10){
+                write_candlestick_to_file(trades[i].symbol, avg_price[i], open_price[i], close_price[i], min_price[i], max_price[i], total_volume[i]);
+                start_time = current_time;
+                // Reset candlestick data
+                count[i] = 0;
+                total_volume[i] = 0;
+                min_price[i] = 0;
+                max_price[i] = 0;
+                open_price[i] = 0;
+                close_price[i] = 0;
+                //if (difftime(current_time, start_time) > 60*15){
+                //}
+                avg_price[i] = 0;
+            }
         }
     }
 }
@@ -302,4 +369,43 @@ void print_latest_trades() {
             trades[i].symbol, trades[i].price, trades[i].volume, trades[i].timestamp);
     }
     printf("\n");
+}
+void write_trade_to_file(const char* symbol, double price, double volume, long long timestamp) {
+    char filename[50];
+    snprintf(filename, sizeof(filename), "logs/%s.txt", symbol);
+    
+    FILE *file = fopen(filename, "a");
+    if (file == NULL) {
+        printf("Error opening file %s\n", filename);
+        return;
+    }
+    
+    fprintf(file, "Price: %.2f, Volume: %.8f, Timestamp: %lld\n", price, volume, timestamp);
+    fclose(file);
+}
+
+void write_candlestick_to_file(const char* symbol, double avg_price, double open_price, double close_price, double min_price, double max_price, double total_volume) {
+    char filename[50];
+    snprintf(filename, sizeof(filename), "candlesticks/%s_candlestick.txt", symbol);
+    
+    FILE *file = fopen(filename, "a");
+    if (file == NULL) {
+        printf("Error opening file %s\n", filename);
+        return;
+    }
+    for(int i = 0; i < NUM_THREADS; i++){
+        fprintf(file, "Average: %.2f, Open: %.2f, Close: %.2f, Min: %.2f, Max: %.2f, Volume: %.8f\n", 
+            avg_price, close_price, min_price, max_price, total_volume);
+
+    }
+    fclose(file);
+}
+
+void clear_file(const char* filename) {
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        printf("Error opening file %s to clear contents.\n", filename);
+        return;
+    }
+    fclose(file);
 }
