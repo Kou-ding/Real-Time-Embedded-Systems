@@ -25,7 +25,7 @@ The report should be 4 pages containing:
 - a diagram of the percentage of the time the CPU remains idle 
 - comments and results that show that the program can function for days writing data without losses and without stopping if something happens to the connection or the network.
 
-### WebSockets | Part 1
+### WebSockets & Python | Part 1
 
 #### Finnhub account
 First, we have to make an account in [Finnhub](https://finnhub.io) so that we can get an API key. Finnhub is a financial API organized around REST and the key it gives us is used to authenticate our specific requests.
@@ -70,8 +70,9 @@ The trade information being provided has this form:
 - t: unix milliseconds timestamp,
 - c: list of trade conditions
 
-### Pthreads | Part 2
+### Websockets & C lang | Part 2
 Now that we know how Finnhub works and what kind of data it provides we need to do the same thing but in C and parallelize the process using pthreads.
+> Note: The code has a lot of comments that go into more specific parts of the application.
 
 #### Installing web sockets C library
 Then, we need to install a library that will help us subscribe to certain market symbols, effectively listening to the current market's activity for certain stocks and/or cryptos.
@@ -123,6 +124,8 @@ Before receiving a message the program must first succeed in a handshake with th
 
 After all that is done, we can now move on to receiving the message via the "the client received a message" case of the callback function. Here we analyze the JSON formatted message that is sent through the WebSocket connection to extract the data and log it inside a txt file. The candlestick is also calculated here.
 
+#### P threads 
+Finally, we need to parallelize the c code using p threads so that we meet the real-time demands of our application. We will be assigning one producer and one consumer to each stock. They are going to be making use of a common circular queue. The producer function adds trade data to the queue and the consumer takes them out in due time to calculate the candlestick and store some trade data in a txt file as a failsafe for time when the system is unstable. We utilize a mutex so that only one thread can give or take from the queue at a particular moment of time.
 
 ### Results | Part 3
 

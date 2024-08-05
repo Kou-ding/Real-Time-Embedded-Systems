@@ -121,8 +121,7 @@ int main(void){
     info.uid = -1; 
     info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
     info.max_http_header_pool = 1024; // Increase if necessary
-    info.pt_serv_buf_size = 4096; // Default is 4096 bytes, increase as needed
-    //info.pt_serv_buf_size = 16384; // Increase buffer size to 16 KB
+    info.pt_serv_buf_size = 4096; // Default is 4096 bytes, increase buffer size to 16 KB if needed 16384 bytes
 
     // The URL of the websocket
     char inputURL[300] = "ws.finnhub.io/?token=cqe0rvpr01qgmug3d06gcqe0rvpr01qgmug3d070";
@@ -173,7 +172,7 @@ int main(void){
     }
 
     printf(KGRN"[Main] Successful web socket instance creation.\n"RESET);   
-
+    
     // Candlestick timer
     start_time = time(NULL);
 
@@ -267,9 +266,6 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
                 update_trade_data(symbol, price, volume, timestamp);
             }
 
-            // Print the latest trades
-            //print_latest_trades();
-
             json_decref(root);
             break;
         
@@ -345,7 +341,7 @@ void update_trade_data(const char* symbol, double price, double volume, long lon
             count[i]++;
             close_price[i] = trades[i].price;
 
-            if (difftime(current_time, start_time) > 10){
+            if (difftime(current_time, start_time) > 5){
                 write_candlestick_to_file(trades[i].symbol, avg_price[i], open_price[i], close_price[i], min_price[i], max_price[i], total_volume[i]);
                 start_time = current_time;
                 // Reset candlestick data
@@ -362,14 +358,7 @@ void update_trade_data(const char* symbol, double price, double volume, long lon
         }
     }
 }
-void print_latest_trades() {
-    printf(KBRN"Latest Trades:\n"RESET);
-    for (int i = 0; i < NUM_THREADS; i++) {
-        printf("%s - Price: %.2f, Volume: %.8f, Timestamp: %lld\n", 
-            trades[i].symbol, trades[i].price, trades[i].volume, trades[i].timestamp);
-    }
-    printf("\n");
-}
+
 void write_trade_to_file(const char* symbol, double price, double volume, long long timestamp) {
     char filename[50];
     snprintf(filename, sizeof(filename), "logs/%s.txt", symbol);
@@ -393,11 +382,9 @@ void write_candlestick_to_file(const char* symbol, double avg_price, double open
         printf("Error opening file %s\n", filename);
         return;
     }
-    for(int i = 0; i < NUM_THREADS; i++){
-        fprintf(file, "Average: %.2f, Open: %.2f, Close: %.2f, Min: %.2f, Max: %.2f, Volume: %.8f\n", 
-            avg_price, close_price, min_price, max_price, total_volume);
+    fprintf(file, "Average: %.2f, Open: %.2f, Close: %.2f, Min: %.2f, Max: %.2f, Volume: %.8f\n", 
+            avg_price, open_price, close_price, min_price, max_price, total_volume);
 
-    }
     fclose(file);
 }
 
