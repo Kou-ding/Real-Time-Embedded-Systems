@@ -125,12 +125,14 @@ Before receiving a message the program must first succeed in a handshake with th
 After all that is done, we can now move on to receiving the message via the "the client received a message" case of the callback function. Here we analyze the JSON formatted message that is sent through the WebSocket connection to extract the data and log it inside a txt file. The candlestick is also calculated here.
 
 #### P threads 
-Finally, we need to parallelize the c code using p threads so that we meet the real-time demands of our application. We will be assigning one producer and one consumer to each stock. They are going to be making use of a common circular queue. The producer function adds trade data to the queue and the consumer takes them out in due time to calculate the candlestick and store some trade data in a txt file as a failsafe for time when the system is unstable. We utilize a mutex so that only one thread can give or take from the queue at a particular moment of time.
+Finally, we need to parallelize the c code using p threads so that we meet the real-time demands of our application. We will be assigning one producer and one consumer to each stock. They are going to be making use of a common circular queue unique for each stock. The producer function adds trade data to the queue and the consumer takes them out in due time to calculate the candlestick and store some trade data in a txt file as a failsafe for time when the system is unstable. We utilize a mutex so that only one thread can give or take from the queue at a particular moment in time. Finally, we set some variable arrays, that have as many elements as there are threads, so that we can have unique variables for each thread to work with and calculate times, values and everything that is needed.
 
 ### Results | Part 3
 
 ### Observations | Part 4
 When setting up the protocol array I originally set the buffer size at 1000. This allowed me to read the entirety of the messages being sent, but once in a while, the connection would terminate without any obvious, for me, reason. Setting the buffer to 0 resolved the issue.
+
+There seems to be an occurrence where the WebSocket connection terminates on its own around the 2-hour mark. The connection flag remains 1, indicating that the connection is still open when in reality we are not receiving any data. This makes it difficult for a 
 
 
 ### Sources

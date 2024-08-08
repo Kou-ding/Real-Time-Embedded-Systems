@@ -6,7 +6,6 @@
 #include <libwebsockets.h>
 #include <pthread.h>
 #include <jansson.h>
-#include <pthread.h>
 #include <time.h>
 
 //Colours for terminal text formatting
