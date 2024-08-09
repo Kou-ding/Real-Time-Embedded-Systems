@@ -25,7 +25,7 @@
 
 void *producer (void *args);
 void *consumer (void *args);
-int x = 0;
+
 // The queue and its functions
 typedef struct {
   int buf[QUEUESIZE];
@@ -78,14 +78,6 @@ void *producer (void *q){
   int i;
 
   fifo = (queue *)q;
-    ////
-    for (i = 0; i < LOOP; i++) {
-        pthread_mutex_lock (fifo->mut);
-        x=x+1;
-        printf("Hello World %d\n",x);
-        pthread_mutex_unlock (fifo->mut);
-    }
-    ////
     for (i = 0; i < LOOP; i++) {
     pthread_mutex_lock (fifo->mut);
     while (fifo->full) {
@@ -106,14 +98,6 @@ void *consumer (void *q){
     int i, d;
 
     fifo = (queue *)q;
-    ////
-    for (i = 0; i < LOOP; i++) {
-        pthread_mutex_lock (fifo->mut);
-        x=x+1;
-        printf("Hello Sword %d\n",x);
-        pthread_mutex_unlock (fifo->mut);
-    }
-    ////
     for (i = 0; i < LOOP; i++) {
     pthread_mutex_lock (fifo->mut);
     while (fifo->empty) {

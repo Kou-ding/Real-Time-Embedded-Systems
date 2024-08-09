@@ -216,6 +216,13 @@ int main(void){
         }
     }
 
+
+    // Create a the conusmer threads to manage the data from the producer threads
+    // while we wait for the next message
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_create(&con[i], NULL, consumer, (void *)(intptr_t)i);
+    }
+    
     // Candlestick timer
     for (int i=0;i<NUM_THREADS;i++){
         start_time[i]=time(NULL);
@@ -230,29 +237,12 @@ int main(void){
 
         // Print the flags status
         printf(KBRN"Flags-Status\n"RESET);
-        printf("Connection flag status: %d\n", connection_flag);
-        printf("Destroy flag status: %d\n", destroy_flag);
-        printf("Writeable flag status: %d\n", writeable_flag);
+        printf("C: %d, W: %d, D: %d\n", connection_flag, writeable_flag, destroy_flag);
 
-        // Create a the conusmer threads to manage the data from the producer threads
-        // while we wait for the next message
-        for (int i = 0; i < NUM_THREADS; i++) {
-            pthread_create(&con[i], NULL, consumer, (void *)(intptr_t)i);
-        }
-        for (int i = 0; i < NUM_THREADS; i++) {
-            pthread_join(con[i], NULL);
-        }
-        // Sleep to save CPU usage
-        //sleep(3);
     }
 
     // Destroy the websocket connection
     lws_context_destroy(context);
-
-    // Wait for the threads to finish
-    for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(pro[i], NULL);
-    }
 
     // Destroy the queues
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -490,7 +480,7 @@ void *consumer(void *arg){
     int thread_id = (intptr_t)arg;
     queue *fifo;
     fifo = queues[thread_id];
-    while(!queues[thread_id]->empty){
+    while(!destroy_flag){
         pthread_mutex_lock(fifo->mut);
         while (fifo->empty) {
             pthread_cond_wait(fifo->notEmpty, fifo->mut);

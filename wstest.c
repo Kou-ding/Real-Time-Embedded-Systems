@@ -183,12 +183,8 @@ int main(void){
 
         // Print the flags status
         printf(KBRN"Flags-Status\n"RESET);
-        printf("Connection flag status: %d\n", connection_flag);
-        printf("Destroy flag status: %d\n", destroy_flag);
-        printf("Writeable flag status: %d\n", writeable_flag);
+        printf("C: %d, W: %d, D: %d\n", connection_flag, writeable_flag, destroy_flag);
 
-        // Sleep to save CPU usage
-        //sleep(3);
     }
 
     // Destroy the websocket connection
@@ -210,6 +206,29 @@ int main(void){
 
 static void interrupt_handler(int signal){
     destroy_flag = 1;
+}
+
+static void websocket_write_back(struct lws *wsi){
+    //Check if the websocket instance is NULL
+    if (wsi == NULL){
+        return -1;
+    }
+
+    char *out = NULL;
+    char str[100];
+
+    for(int i = 0; i < NUM_THREADS; i++){
+        sprintf(str, "{\"type\":\"subscribe\",\"symbol\":\"%s\"}\n", trades[i].symbol);
+        //Printing the subscription request
+        printf(KBLU"Websocket write back: %s\n"RESET, str);
+        int len = strlen(str);
+        out = (char *)malloc(sizeof(char)*(LWS_SEND_BUFFER_PRE_PADDING + len + LWS_SEND_BUFFER_POST_PADDING));
+        memcpy(out + LWS_SEND_BUFFER_PRE_PADDING, str, len);
+        lws_write(wsi, out+LWS_SEND_BUFFER_PRE_PADDING, len, LWS_WRITE_TEXT);
+    }
+    
+    //Free the memory
+    free(out);
 }
 
 static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason, 
@@ -285,29 +304,6 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
     return 0;
 }
 
-static void websocket_write_back(struct lws *wsi){
-    //Check if the websocket instance is NULL
-    if (wsi == NULL){
-        return -1;
-    }
-
-    char *out = NULL;
-    char str[100];
-
-    for(int i = 0; i < NUM_THREADS; i++){
-        sprintf(str, "{\"type\":\"subscribe\",\"symbol\":\"%s\"}\n", trades[i].symbol);
-        //Printing the subscription request
-        printf(KBLU"Websocket write back: %s\n"RESET, str);
-        int len = strlen(str);
-        out = (char *)malloc(sizeof(char)*(LWS_SEND_BUFFER_PRE_PADDING + len + LWS_SEND_BUFFER_POST_PADDING));
-        memcpy(out + LWS_SEND_BUFFER_PRE_PADDING, str, len);
-        lws_write(wsi, out+LWS_SEND_BUFFER_PRE_PADDING, len, LWS_WRITE_TEXT);
-    }
-    
-    //Free the memory
-    free(out);
-}
-
 //Update and print trade data
 void update_trade_data(const char* symbol, double price, double volume, long long timestamp) {
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -324,12 +320,12 @@ void update_trade_data(const char* symbol, double price, double volume, long lon
             // Update the candlestick data
             if (count[i] == 0) {
                 open_price[i] = trades[i].price;
+                min_price[i] = trades[i].price;
+                max_price[i] = trades[i].price;
             }
             else {
-                if (trades[i].price < min_price[i] || min_price[i] == 0) {
+                if (trades[i].price < min_price[i]) {
                     min_price[i] = trades[i].price;
-                    min_price[i] = trades[i].price;
-                    max_price[i] = trades[i].price;
                 }
                 if (trades[i].price > max_price[i]) {
                     max_price[i] = trades[i].price;
@@ -340,19 +336,16 @@ void update_trade_data(const char* symbol, double price, double volume, long lon
             count[i]++;
             close_price[i] = trades[i].price;
 
-            if (difftime(current_time, start_time) > 5){
+            if (difftime(current_time, start_time) > 60){
                 write_candlestick_to_file(trades[i].symbol, avg_price[i], open_price[i], close_price[i], min_price[i], max_price[i], total_volume[i]);
                 start_time = current_time;
                 // Reset candlestick data
-                count[i] = 0;
                 total_volume[i] = 0;
                 min_price[i] = 0;
                 max_price[i] = 0;
                 open_price[i] = 0;
                 close_price[i] = 0;
-                //if (difftime(current_time, start_time) > 60*15){
-                //}
-                avg_price[i] = 0;
+                count[i] = 0;
             }
         }
     }

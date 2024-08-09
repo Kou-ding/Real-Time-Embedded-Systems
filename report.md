@@ -132,7 +132,7 @@ Finally, we need to parallelize the c code using p threads so that we meet the r
 ### Observations | Part 4
 When setting up the protocol array I originally set the buffer size at 1000. This allowed me to read the entirety of the messages being sent, but once in a while, the connection would terminate without any obvious, for me, reason. Setting the buffer to 0 resolved the issue.
 
-There seems to be an occurrence where the WebSocket connection terminates on its own around the 2-hour mark. The connection flag remains 1, indicating that the connection is still open when in reality we are not receiving any data. This makes it difficult for a 
+There seems to be an occurrence where the WebSocket connection terminates on its own around the 2-hour mark. The connection flag remains 1, indicating that the connection is still open when in reality we are not receiving any data. This makes it difficult for us to attempt a reconnection since there isn't any variable that can inform us that the connection has been disrupted.
 
 
 ### Sources
