@@ -31,13 +31,16 @@ static int connection_flag = 0; //connection flag
 static int writeable_flag = 0; //writeable flag
 
 // Initialize the candlestick variables
-int count[NUM_THREADS];
-double avg_price[NUM_THREADS];
 double total_volume[NUM_THREADS];
 double min_price[NUM_THREADS];
 double max_price[NUM_THREADS];
 double open_price[NUM_THREADS];
 double close_price[NUM_THREADS];
+int minute[NUM_THREADS];
+int cnt[NUM_THREADS];
+double avg[NUM_THREADS];
+double price_sum[NUM_THREADS][15];
+int count[NUM_THREADS][15];
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
@@ -62,7 +65,9 @@ TradeData trades[NUM_THREADS];
 // Write the trade data to a file
 void write_trade_to_file(const char* symbol, double price, double volume, long long timestamp);
 // Write the candlestick data to a file
-void write_candlestick_to_file(const char* symbol, double avg_price, double open_price, double close_price, double min_price, double max_price, double total_volume);
+void write_candlestick_to_file(const char* symbol, double open_price, double close_price, double min_price, double max_price, double total_volume);
+// Write the moving average price to a file
+void write_avg_to_file(const char* symbol, double price_sum);
 // Clear the contents of a file
 void clear_file(const char* filename);
 
@@ -113,26 +118,39 @@ time_t avg_current_time[NUM_THREADS];
 
 int main(void){
     // Initialize the trades array with symbols
-    strcpy(trades[0].symbol, "NVDA");
-    strcpy(trades[1].symbol, "GOOGL");
-    strcpy(trades[2].symbol, "BINANCE:BTCUSDT");
-    strcpy(trades[3].symbol, "BINANCE:ETHUSDT");
-
+    strcpy(trades[0].symbol, "BINANCE:BTCUSDT");
+    strcpy(trades[1].symbol, "BINANCE:ETHUSDT");
+    strcpy(trades[2].symbol, "NVDA");
+    strcpy(trades[3].symbol, "GOOGL");
+    
     // Clear the contents of the log files
     for (int i = 0; i < NUM_THREADS; i++) {
         char trade_filename[50];
         char candlestick_filename[50];
+        char avg_filename[50];
         snprintf(trade_filename, sizeof(trade_filename), "logs/%s.txt", trades[i].symbol);
         snprintf(candlestick_filename, sizeof(candlestick_filename), "candlesticks/%s_candlestick.txt", trades[i].symbol);
+        snprintf(avg_filename, sizeof(avg_filename), "averages/%s_avg.txt", trades[i].symbol);
         clear_file(trade_filename);
         clear_file(candlestick_filename);
+        clear_file(avg_filename);
     }
+
     // Initialize the candlestick data for each symbol
     for (int i = 0; i < NUM_THREADS; i++) {
-        count[i] = 0;
         min_price[i] = 0;
         max_price[i] = 0;
         total_volume[i] = 0;
+        minute[i] = 0;
+        cnt[i] = 0;
+    }
+    // Initialize the moving average data for each symbol
+    for(int i=0;i<NUM_THREADS;i++){
+        avg[i]=0;
+        for(int j=0;j<15;j++){
+            price_sum[i][j]=0;
+            count[i][j]=0;
+        }
     }
 
     // Register the signal SIGINT handler
@@ -244,13 +262,19 @@ int main(void){
     // Destroy the websocket connection
     lws_context_destroy(context);
 
-    // Destroy the queues
-    for (int i = 0; i < NUM_THREADS; i++) {
-        queueDelete(queues[i]);
+    // Join the pthreads
+    for (int i = 0; i < NUM_THREADS; i++){
+        pthread_join(con[i], NULL);
+        pthread_join(pro[i], NULL);
     }
 
     // Exit the pthreads
     pthread_exit(NULL);
+
+    // Destroy the queues
+    for (int i = 0; i < NUM_THREADS; i++) {
+        queueDelete(queues[i]);
+    }
 
     return 0;
 }
@@ -258,6 +282,11 @@ int main(void){
 
 static void interrupt_handler(int signal){
     destroy_flag = 1;
+    // Get the pthreads unstuck from any condition wait
+    for(int i = 0; i < NUM_THREADS; i++){
+        pthread_cond_broadcast(queues[i]->notEmpty);
+        pthread_cond_broadcast(queues[i]->notFull);
+    }   
 }
 
 static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason, 
@@ -274,14 +303,14 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
             printf(KRED"[Main Service] Client Connection Error: %s.\n"RESET, in);
             //Set flags
-            //destroy_flag = 1;
+            destroy_flag = 1;
             connection_flag = 0;
             break;
         //This case is called when the connection is closed
         case LWS_CALLBACK_CLOSED:
             printf(KYEL"[Main Service] Websocket connection closed\n"RESET);
             //Set flags
-            //destroy_flag = 1;
+            destroy_flag = 1;
             connection_flag = 0;
             break;
         //This case is called when the client receives a message from the websocket
@@ -310,7 +339,6 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
                 double price = json_number_value(json_object_get(value, "p"));
                 double volume = json_number_value(json_object_get(value, "v"));
                 long long timestamp = json_integer_value(json_object_get(value, "t"));
-                //update_trade_data(symbol, price, volume, timestamp);
                 for (int i = 0; i < NUM_THREADS; i++) {
                     if (strcmp(trades[i].symbol, symbol) == 0) {
                         trades[i].thread_id = i;
@@ -380,7 +408,7 @@ void write_trade_to_file(const char* symbol, double price, double volume, long l
     fclose(file);
 }
 
-void write_candlestick_to_file(const char* symbol, double avg_price, double open_price, double close_price, double min_price, double max_price, double total_volume) {
+void write_candlestick_to_file(const char* symbol, double open_price, double close_price, double min_price, double max_price, double total_volume) {
     char filename[50];
     snprintf(filename, sizeof(filename), "candlesticks/%s_candlestick.txt", symbol);
     
@@ -389,9 +417,22 @@ void write_candlestick_to_file(const char* symbol, double avg_price, double open
         printf("Error opening file %s\n", filename);
         return;
     }
-    fprintf(file, "Average: %.2f, Open: %.2f, Close: %.2f, Min: %.2f, Max: %.2f, Volume: %.8f\n", 
-            avg_price, open_price, close_price, min_price, max_price, total_volume);
+    fprintf(file, "Open: %.2f, Close: %.2f, Min: %.2f, Max: %.2f, Volume: %.8f\n", 
+            open_price, close_price, min_price, max_price, total_volume);
 
+    fclose(file);
+}
+
+void write_avg_to_file(const char* symbol, double price_sum) {
+    char filename[50];
+    snprintf(filename, sizeof(filename), "averages/%s_avg.txt", symbol);
+    
+    FILE *file = fopen(filename, "a");
+    if (file == NULL) {
+        printf("Error opening file %s\n", filename);
+        return;
+    }
+    fprintf(file, "Average: %.2f\n", price_sum);
     fclose(file);
 }
 
@@ -466,7 +507,7 @@ void *producer(void *arg){
     fifo = queues[in->thread_id];
 
     pthread_mutex_lock(fifo->mut);
-    while (fifo->full) {
+    while (fifo->full && !destroy_flag) {
         pthread_cond_wait(fifo->notFull, fifo->mut);
     }
     // this in has to be specified
@@ -482,7 +523,7 @@ void *consumer(void *arg){
     fifo = queues[thread_id];
     while(!destroy_flag){
         pthread_mutex_lock(fifo->mut);
-        while (fifo->empty) {
+        while (fifo->empty && !destroy_flag) {
             pthread_cond_wait(fifo->notEmpty, fifo->mut);
         }
         // Extract one trade from the queue
@@ -496,40 +537,67 @@ void *consumer(void *arg){
         current_time[thread_id] = time(NULL);
 
         // Update the candlestick data
-        if (count[thread_id] == 0) {
+        if (count[thread_id][minute[thread_id]] == 0) {
             open_price[thread_id] = trades[thread_id].price;
+            min_price[thread_id] = trades[thread_id].price;
+            max_price[thread_id] = trades[thread_id].price;
         }
         else {
-            if (trades[thread_id].price < min_price[thread_id] || min_price[thread_id] == 0) {
+            if (trades[thread_id].price < min_price[thread_id]) {
                 min_price[thread_id] = trades[thread_id].price;
-                min_price[thread_id] = trades[thread_id].price;
-                max_price[thread_id] = trades[thread_id].price;
             }
             if (trades[thread_id].price > max_price[thread_id]) {
                 max_price[thread_id] = trades[thread_id].price;
             }
         }
         total_volume[thread_id] += trades[thread_id].volume;
+        
         // calulating the average price based on the previous average price
-        avg_price[thread_id] = (avg_price[thread_id] * count[thread_id] + trades[thread_id].price) / (count[thread_id] + 1); // price_avg*count=price1+price2+price3+...+priceN 
-        count[thread_id]++;
+        // every minute has its own average price and we keep track of the last 15 minutes
+        price_sum[thread_id][minute[thread_id]] += trades[thread_id].price; // price_avg*count=price1+price2+price3+...+priceN 
+        count[thread_id][minute[thread_id]]++;
         close_price[thread_id] = trades[thread_id].price;
 
-        if (difftime(current_time[thread_id], start_time[thread_id]) >= 60){
-            write_candlestick_to_file(trades[thread_id].symbol, avg_price[thread_id], open_price[thread_id], close_price[thread_id], min_price[thread_id], max_price[thread_id], total_volume[thread_id]);
+        if (difftime(current_time[thread_id], start_time[thread_id]) >= 5){
+            // Write the candlestick data to a file
+            write_candlestick_to_file(trades[thread_id].symbol, open_price[thread_id], close_price[thread_id], min_price[thread_id], max_price[thread_id], total_volume[thread_id]);
+            
+            // Calculate the moving average price
+            for(int i=0;i<15;i++){
+                avg[thread_id] += price_sum[thread_id][i];
+                cnt[thread_id] += count[thread_id][i];
+            }
+            avg[thread_id] = cnt[thread_id] > 0 ? avg[thread_id] / cnt[thread_id] : 0;
+
+            // Write the moving average price to a file
+            write_avg_to_file(trades[thread_id].symbol, avg[thread_id]);
+
+            // Reset the timer
             start_time[thread_id] = current_time[thread_id];
+
             // Reset candlestick data
             total_volume[thread_id] = 0;
             min_price[thread_id] = 0;
             max_price[thread_id] = 0;
             open_price[thread_id] = 0;
             close_price[thread_id] = 0;
-            //if (difftime(avg_current_time[thread_id], avg_start_time[thread_id]) >= 60*15){
-                // Reset 
-            //}
-            avg_price[thread_id] = 0;
-            count[thread_id] = 0;
-            
+
+            // Reset the moving average price and its counter
+            minute[thread_id] = (minute[thread_id] + 1) % 15;
+            price_sum[thread_id][minute[thread_id]] = 0;
+            count[thread_id][minute[thread_id]] = 0;
+            avg[thread_id] = 0;
+            cnt[thread_id] = 0;
+
+            // Clear the contents of the log files
+            for (int i = 0; i < NUM_THREADS; i++) {
+                char trade_filename[50];
+                snprintf(trade_filename, sizeof(trade_filename), "logs/%s.txt", trades[i].symbol);
+                clear_file(trade_filename);
+            }
+        }
+        if(destroy_flag){
+            break;
         }
     }
     return NULL;
