@@ -25,4 +25,9 @@ ptest: ptest.c
 
 # cleanup functionality
 clean:
-	rm -f websockets embedded wstest ptest logs/*.txt candlesticks/*.txt averages/*.txt
+	rm -f websockets embedded wstest ptest 
+	rm -f logs/*.txt 
+	rm -f candlesticks/*.txt 
+	rm -f averages/*.txt
+	rm -f delays/*.csv
+	rm -f python_websockets/*.png

@@ -21,26 +21,36 @@
 #define RESET "\033[0m" //Reset
 
 //Number of threads which is also the number of symbols
-#define NUM_THREADS 4
+#define NUM_THREADS 2
 //Queue size
 #define QUEUESIZE 200
+// Delay array size 
+#define DELAYSIZE 1000
+
+struct timespec start, end;
 
 //flags to determine the state of the websocket
 static int destroy_flag = 0; //destroy flag
 static int connection_flag = 0; //connection flag
 static int writeable_flag = 0; //writeable flag
 
-// Initialize the candlestick variables
+// Declare candlestick variables
 double total_volume[NUM_THREADS];
 double min_price[NUM_THREADS];
 double max_price[NUM_THREADS];
 double open_price[NUM_THREADS];
 double close_price[NUM_THREADS];
+
+// Declare moving average variables
 int minute[NUM_THREADS];
-int cnt[NUM_THREADS];
-double avg[NUM_THREADS];
 double price_sum[NUM_THREADS][15];
 int count[NUM_THREADS][15];
+double avg[NUM_THREADS];
+int total_count[NUM_THREADS];
+
+// Declare delay variables
+double dequeue_time[NUM_THREADS];
+double delay[NUM_THREADS];
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
@@ -57,7 +67,8 @@ typedef struct {
     char symbol[20];
     double price;
     double volume;
-    long long timestamp;
+    double timestamp;
+    double enqueue_time;
 } TradeData;
 
 // An array of TradeData structures to store the latest trade data for each symbol
@@ -68,8 +79,12 @@ void write_trade_to_file(const char* symbol, double price, double volume, long l
 void write_candlestick_to_file(const char* symbol, double open_price, double close_price, double min_price, double max_price, double total_volume);
 // Write the moving average price to a file
 void write_avg_to_file(const char* symbol, double price_sum);
+// Write the delay between enqueuing and dequeuing a Tradedata to a file
+void write_delay_to_file(const char* symbol, double delay);
 // Clear the contents of a file
 void clear_file(const char* filename);
+
+
 
 //This array defines the protocols used in the websocket
 static struct lws_protocols protocols[]={
@@ -113,39 +128,40 @@ pthread_t pro[NUM_THREADS], con[NUM_THREADS];
 // Candlestick timer
 time_t start_time[NUM_THREADS];
 time_t current_time[NUM_THREADS];
-time_t avg_start_time[NUM_THREADS];
-time_t avg_current_time[NUM_THREADS];
 
 int main(void){
     // Initialize the trades array with symbols
     strcpy(trades[0].symbol, "BINANCE:BTCUSDT");
     strcpy(trades[1].symbol, "BINANCE:ETHUSDT");
-    strcpy(trades[2].symbol, "NVDA");
-    strcpy(trades[3].symbol, "GOOGL");
+    //strcpy(trades[2].symbol, "NVDA");
+    //strcpy(trades[3].symbol, "GOOGL");
     
     // Clear the contents of the log files
     for (int i = 0; i < NUM_THREADS; i++) {
         char trade_filename[50];
         char candlestick_filename[50];
         char avg_filename[50];
+        char delay_filename[50];
         snprintf(trade_filename, sizeof(trade_filename), "logs/%s.txt", trades[i].symbol);
         snprintf(candlestick_filename, sizeof(candlestick_filename), "candlesticks/%s_candlestick.txt", trades[i].symbol);
         snprintf(avg_filename, sizeof(avg_filename), "averages/%s_avg.txt", trades[i].symbol);
+        snprintf(delay_filename, sizeof(delay_filename), "delays/%s_delays.csv", trades[i].symbol);
         clear_file(trade_filename);
         clear_file(candlestick_filename);
         clear_file(avg_filename);
+        clear_file(delay_filename);
     }
 
-    // Initialize the candlestick data for each symbol
+    // Initialize the candlestick data and the moving average data for each symbol
     for (int i = 0; i < NUM_THREADS; i++) {
+        // candlestick
         min_price[i] = 0;
         max_price[i] = 0;
         total_volume[i] = 0;
+        
+        // moving average
         minute[i] = 0;
-        cnt[i] = 0;
-    }
-    // Initialize the moving average data for each symbol
-    for(int i=0;i<NUM_THREADS;i++){
+        total_count[i] = 0;
         avg[i]=0;
         for(int j=0;j<15;j++){
             price_sum[i][j]=0;
@@ -240,12 +256,6 @@ int main(void){
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_create(&con[i], NULL, consumer, (void *)(intptr_t)i);
     }
-    
-    // Candlestick timer
-    for (int i=0;i<NUM_THREADS;i++){
-        start_time[i]=time(NULL);
-        avg_start_time[i]=time(NULL);
-    }
 
     // Loops until the destroy flag is set to 1 to maintain the websocket connection
     // The destroy flag becomes 1 when the user presses Ctr+C
@@ -258,7 +268,6 @@ int main(void){
         printf("C: %d, W: %d, D: %d\n", connection_flag, writeable_flag, destroy_flag);
 
     }
-
     // Destroy the websocket connection
     lws_context_destroy(context);
 
@@ -267,7 +276,6 @@ int main(void){
         pthread_join(con[i], NULL);
         pthread_join(pro[i], NULL);
     }
-
     // Exit the pthreads
     pthread_exit(NULL);
 
@@ -276,6 +284,10 @@ int main(void){
         queueDelete(queues[i]);
     }
 
+    // Free the delay array
+    for (int i = 0; i < NUM_THREADS; i++) {
+        free_delay_array(i);
+    }
     return 0;
 }
 
@@ -286,7 +298,8 @@ static void interrupt_handler(int signal){
     for(int i = 0; i < NUM_THREADS; i++){
         pthread_cond_broadcast(queues[i]->notEmpty);
         pthread_cond_broadcast(queues[i]->notFull);
-    }   
+    }
+    printf(KYEL"[Main] Program terminated.\n"RESET);
 }
 
 static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason, 
@@ -345,6 +358,12 @@ static int ws_service_callback(struct lws *wsi, enum lws_callback_reasons reason
                         trades[i].price = price;
                         trades[i].volume = volume;
                         trades[i].timestamp = timestamp;
+                        // Get the current time
+                        if (clock_gettime(CLOCK_MONOTONIC, &start) == -1) {
+                            perror(KRED"Error getting the enqueue time"RESET);
+                            return 1;
+                        }
+                        trades[i].enqueue_time = start.tv_sec + start.tv_nsec / 1e9;
                         pthread_create(&pro[i], NULL, producer, (void *)&trades[i]);
                     }
                 }
@@ -396,6 +415,7 @@ static void websocket_write_back(struct lws *wsi){
 }
 void write_trade_to_file(const char* symbol, double price, double volume, long long timestamp) {
     char filename[50];
+    if (strlen(symbol)!=0){
     snprintf(filename, sizeof(filename), "logs/%s.txt", symbol);
     
     FILE *file = fopen(filename, "a");
@@ -406,10 +426,12 @@ void write_trade_to_file(const char* symbol, double price, double volume, long l
     
     fprintf(file, "Price: %.2f, Volume: %.8f, Timestamp: %lld\n", price, volume, timestamp);
     fclose(file);
+    }
 }
 
 void write_candlestick_to_file(const char* symbol, double open_price, double close_price, double min_price, double max_price, double total_volume) {
     char filename[50];
+    if (strlen(symbol)!=0){
     snprintf(filename, sizeof(filename), "candlesticks/%s_candlestick.txt", symbol);
     
     FILE *file = fopen(filename, "a");
@@ -421,19 +443,38 @@ void write_candlestick_to_file(const char* symbol, double open_price, double clo
             open_price, close_price, min_price, max_price, total_volume);
 
     fclose(file);
+    }
 }
 
 void write_avg_to_file(const char* symbol, double price_sum) {
     char filename[50];
-    snprintf(filename, sizeof(filename), "averages/%s_avg.txt", symbol);
-    
-    FILE *file = fopen(filename, "a");
-    if (file == NULL) {
-        printf("Error opening file %s\n", filename);
-        return;
+    if (strlen(symbol)!=0){
+        snprintf(filename, sizeof(filename), "averages/%s_avg.txt", symbol);
+        
+        FILE *file = fopen(filename, "a");
+        if (file == NULL) {
+            printf("Error opening file %s\n", filename);
+            return;
+        }
+        fprintf(file, "Average: %.2f\n", price_sum);
+        fclose(file);
     }
-    fprintf(file, "Average: %.2f\n", price_sum);
-    fclose(file);
+}
+
+// Function to write delay times to a CSV file
+void write_delay_to_file(const char* symbol, double delay) {
+    char filename[50];
+    if (strlen(symbol)!=0){
+        snprintf(filename, sizeof(filename), "delays/%s_delays.csv", symbol);
+
+        FILE *file = fopen(filename, "a");
+        if (file == NULL) {
+            printf("Error opening file %s\n", filename);
+            return;
+        }
+        fprintf(file, "%.9f\n", delay);
+        fclose(file);
+    }
 }
 
 void clear_file(const char* filename) {
@@ -528,6 +569,17 @@ void *consumer(void *arg){
         }
         // Extract one trade from the queue
         queueDel(fifo, &trades[thread_id]);
+
+        // Calculate the delay time between enqueuing and dequeuing the trade
+        if (clock_gettime(CLOCK_MONOTONIC, &end) == -1) {
+            perror(KRED"Error getting the dequeue time"RESET);
+            return NULL;
+        }
+        dequeue_time[thread_id] = end.tv_sec + end.tv_nsec / 1e9;
+        delay[thread_id] = dequeue_time[thread_id] - trades[thread_id].enqueue_time;
+        printf(KCYN"Delay time for %s: %.9f\n"RESET, trades[thread_id].symbol, delay[thread_id]);
+        write_delay_to_file(trades[thread_id].symbol, delay[thread_id]);
+
         pthread_mutex_unlock(fifo->mut);
         pthread_cond_signal(fifo->notFull);
 
@@ -565,9 +617,9 @@ void *consumer(void *arg){
             // Calculate the moving average price
             for(int i=0;i<15;i++){
                 avg[thread_id] += price_sum[thread_id][i];
-                cnt[thread_id] += count[thread_id][i];
+                total_count[thread_id] += count[thread_id][i];
             }
-            avg[thread_id] = cnt[thread_id] > 0 ? avg[thread_id] / cnt[thread_id] : 0;
+            avg[thread_id] = total_count[thread_id] > 0 ? avg[thread_id] / total_count[thread_id] : 0;
 
             // Write the moving average price to a file
             write_avg_to_file(trades[thread_id].symbol, avg[thread_id]);
@@ -587,7 +639,7 @@ void *consumer(void *arg){
             price_sum[thread_id][minute[thread_id]] = 0;
             count[thread_id][minute[thread_id]] = 0;
             avg[thread_id] = 0;
-            cnt[thread_id] = 0;
+            total_count[thread_id] = 0;
 
             // Clear the contents of the log files
             for (int i = 0; i < NUM_THREADS; i++) {

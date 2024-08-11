@@ -125,9 +125,23 @@ Before receiving a message the program must first succeed in a handshake with th
 After all that is done, we can now move on to receiving the message via the "the client received a message" case of the callback function. Here we analyze the JSON formatted message that is sent through the WebSocket connection to extract the data and log it inside a txt file. The candlestick is also calculated here.
 
 #### P threads 
-Finally, we need to parallelize the c code using p threads so that we meet the real-time demands of our application. We will be assigning one producer and one consumer to each stock. They are going to be making use of a common circular queue unique for each stock. The producer function adds trade data to the queue and the consumer takes them out in due time to calculate the candlestick and store some trade data in a txt file as a failsafe for time when the system is unstable. We utilize a mutex so that only one thread can give or take from the queue at a particular moment in time. Finally, we set some variable arrays, that have as many elements as there are threads, so that we can have unique variables for each thread to work with and calculate times, values and everything that is needed.
+Finally, we need to parallelize the c code using p threads so that we meet the real-time demands of our application. We will be assigning one producer and one consumer to each stock. They are going to be making use of a common circular queue unique for each stock. The producer function adds trade data to the queue and the consumer takes them out in due time to calculate the candlestick and the 15-minute moving average of each symbol while occasionally storing some trade data in a txt file. We utilize a mutex so that only one thread can give or take from the queue at a particular moment in time. Finally, we set some variable arrays, that have as many elements as there are threads, so that we can have unique, to each symbol, variables for each thread to work with and calculate times, values and everything that is needed.
 
 ### Results | Part 3
+
+#### Enqueue / Dequeue Delay
+Along with the other text files we instruct the consumer threads to store the delay times, between the time a trade data was inserted into the queue and the time it was processed, inside a CSV file. Then, we can later on run a Python script to process and graph the delay times for each symbol.
+
+```bash
+# navigate to the correct directory
+cd python-websockets/
+# activate our python virtual environment
+source vwebsockets/bin/activate
+# install plotting dependencies 
+pip install pandas matplotlib
+# run plotting script
+python3 csv_plotter.py
+```
 
 ### Observations | Part 4
 When setting up the protocol array I originally set the buffer size at 1000. This allowed me to read the entirety of the messages being sent, but once in a while, the connection would terminate without any obvious, for me, reason. Setting the buffer to 0 resolved the issue.
