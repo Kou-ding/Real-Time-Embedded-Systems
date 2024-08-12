@@ -51,6 +51,7 @@ int total_count[NUM_THREADS];
 // Declare delay variables
 double dequeue_time[NUM_THREADS];
 double delay[NUM_THREADS];
+double idle_time[NUM_THREADS];
 
 // This function sets the destroy flag to 1 when the SIGINT signal (Ctr+C) is received
 // This is used to close the websocket connection and free the memory
@@ -167,6 +168,7 @@ int main(void){
             price_sum[i][j]=0;
             count[i][j]=0;
         }
+        idle_time[i] = 0.0;
     }
 
     // Register the signal SIGINT handler
@@ -250,6 +252,9 @@ int main(void){
         }
     }
 
+    // Determine the time the program divides into threads enters the main loop
+    struct timespec program_start, program_end;
+    clock_gettime(CLOCK_MONOTONIC, &program_start);
 
     // Create a the conusmer threads to manage the data from the producer threads
     // while we wait for the next message
@@ -268,6 +273,17 @@ int main(void){
         printf("C: %d, W: %d, D: %d\n", connection_flag, writeable_flag, destroy_flag);
 
     }
+    // Determine the time the program exits the main loop
+    clock_gettime(CLOCK_MONOTONIC, &program_end);
+    double total_execution_time = (program_end.tv_sec - program_start.tv_sec) + 
+                              (program_end.tv_nsec - program_start.tv_nsec) / 1e9;
+    
+    printf(KBRN"[Main] Total Execution Time: %.4f seconds.\n"RESET, total_execution_time);
+    double total_idle_time = 0.0;
+    for (int i = 0; i < NUM_THREADS; i++) {
+        total_idle_time += idle_time[i];
+    }
+    printf(KBRN"[Main] CPU Idle Percentage: %.4f.\n"RESET, (total_idle_time / (total_execution_time * NUM_THREADS))*100);
     // Destroy the websocket connection
     lws_context_destroy(context);
 
@@ -416,33 +432,33 @@ static void websocket_write_back(struct lws *wsi){
 void write_trade_to_file(const char* symbol, double price, double volume, long long timestamp) {
     char filename[50];
     if (strlen(symbol)!=0){
-    snprintf(filename, sizeof(filename), "logs/%s.txt", symbol);
-    
-    FILE *file = fopen(filename, "a");
-    if (file == NULL) {
-        printf("Error opening file %s\n", filename);
-        return;
-    }
-    
-    fprintf(file, "Price: %.2f, Volume: %.8f, Timestamp: %lld\n", price, volume, timestamp);
-    fclose(file);
+        snprintf(filename, sizeof(filename), "logs/%s.txt", symbol);
+        
+        FILE *file = fopen(filename, "a");
+        if (file == NULL) {
+            printf("Error opening file %s\n", filename);
+            return;
+        }
+        
+        fprintf(file, "Price: %.2f, Volume: %.8f, Timestamp: %lld\n", price, volume, timestamp);
+        fclose(file);
     }
 }
 
 void write_candlestick_to_file(const char* symbol, double open_price, double close_price, double min_price, double max_price, double total_volume) {
     char filename[50];
     if (strlen(symbol)!=0){
-    snprintf(filename, sizeof(filename), "candlesticks/%s_candlestick.txt", symbol);
-    
-    FILE *file = fopen(filename, "a");
-    if (file == NULL) {
-        printf("Error opening file %s\n", filename);
-        return;
-    }
-    fprintf(file, "Open: %.2f, Close: %.2f, Min: %.2f, Max: %.2f, Volume: %.8f\n", 
-            open_price, close_price, min_price, max_price, total_volume);
+        snprintf(filename, sizeof(filename), "candlesticks/%s_candlestick.txt", symbol);
+        
+        FILE *file = fopen(filename, "a");
+        if (file == NULL) {
+            printf("Error opening file %s\n", filename);
+            return;
+        }
+        fprintf(file, "Open: %.2f, Close: %.2f, Min: %.2f, Max: %.2f, Volume: %.8f\n", 
+                open_price, close_price, min_price, max_price, total_volume);
 
-    fclose(file);
+        fclose(file);
     }
 }
 
@@ -562,10 +578,21 @@ void *consumer(void *arg){
     int thread_id = (intptr_t)arg;
     queue *fifo;
     fifo = queues[thread_id];
+    
+    // Idle time timer
+    struct timespec idle_start, idle_end;
+
     while(!destroy_flag){
         pthread_mutex_lock(fifo->mut);
         while (fifo->empty && !destroy_flag) {
+            // Start the idle timer
+            clock_gettime(CLOCK_MONOTONIC, &idle_start);
+            // Wait for the queue to be not empty
             pthread_cond_wait(fifo->notEmpty, fifo->mut);
+            // Stop the idle timer
+            clock_gettime(CLOCK_MONOTONIC, &idle_end);
+            idle_time[thread_id] += (idle_end.tv_sec - idle_start.tv_sec) + 
+                         (idle_end.tv_nsec - idle_start.tv_nsec) / 1e9;
         }
         // Extract one trade from the queue
         queueDel(fifo, &trades[thread_id]);
@@ -577,14 +604,15 @@ void *consumer(void *arg){
         }
         dequeue_time[thread_id] = end.tv_sec + end.tv_nsec / 1e9;
         delay[thread_id] = dequeue_time[thread_id] - trades[thread_id].enqueue_time;
-        printf(KCYN"Delay time for %s: %.9f\n"RESET, trades[thread_id].symbol, delay[thread_id]);
+        // Debugging print
+        //printf(KCYN"Delay time for %s: %.9f\n"RESET, trades[thread_id].symbol, delay[thread_id]);
         write_delay_to_file(trades[thread_id].symbol, delay[thread_id]);
 
         pthread_mutex_unlock(fifo->mut);
         pthread_cond_signal(fifo->notFull);
 
         // Print the trade data inside a txt file
-        //write_trade_to_file(trades[thread_id].symbol, trades[thread_id].price, trades[thread_id].volume, trades[thread_id].timestamp);
+        write_trade_to_file(trades[thread_id].symbol, trades[thread_id].price, trades[thread_id].volume, trades[thread_id].timestamp);
         
         current_time[thread_id] = time(NULL);
 
@@ -644,8 +672,10 @@ void *consumer(void *arg){
             // Clear the contents of the log files
             for (int i = 0; i < NUM_THREADS; i++) {
                 char trade_filename[50];
-                snprintf(trade_filename, sizeof(trade_filename), "logs/%s.txt", trades[i].symbol);
-                clear_file(trade_filename);
+                if (strlen(trades[i].symbol)!=0){
+                    snprintf(trade_filename, sizeof(trade_filename), "logs/%s.txt", trades[i].symbol);
+                    clear_file(trade_filename);
+                }
             }
         }
         if(destroy_flag){

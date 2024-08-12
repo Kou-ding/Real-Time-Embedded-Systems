@@ -130,18 +130,21 @@ Finally, we need to parallelize the c code using p threads so that we meet the r
 ### Results | Part 3
 
 #### Enqueue / Dequeue Delay
-Along with the other text files we instruct the consumer threads to store the delay times, between the time a trade data was inserted into the queue and the time it was processed, inside a CSV file. Then, we can later on run a Python script to process and graph the delay times for each symbol.
+Along with the other text files we instruct the consumer threads to store the delay times, between the time a trade data was inserted into the queue and the time it was processed, inside a CSV file. Then, we can later on run a Python script to process and graph the delay times for each symbol. This benchmark tells us how real-time the calculations we do really are.
 
-```bash
-# navigate to the correct directory
-cd python-websockets/
-# activate our python virtual environment
-source vwebsockets/bin/activate
-# install plotting dependencies 
-pip install pandas matplotlib
-# run plotting script
-python3 csv_plotter.py
-```
+The plots we get after 2 hours are as follows:
+![BTC Plot](path/to/second-image.png)
+![ETH Plot](path/to/second-image.png)
+![NVDA Plot](path/to/second-image.png)
+![GOOGL Plot](path/to/second-image.png)
+
+#### CPU Idle Percentage
+The second benchmark we are going to perform involves calculating how much of the time the CPU remains idle awaiting trades to appear inside the individual queues to process them. Longer CPU idling plays a huge role in keeping the program energy efficient, allowing it to function for prolonged periods without the need for a constant supply of power. Thus the system can very well function through an integrated battery.
+
+Here are some measurements of CPU Idle Percentage:
+|Execution time|CPU Idle %|
+|--------------|----------|
+|
 
 ### Observations | Part 4
 When setting up the protocol array I originally set the buffer size at 1000. This allowed me to read the entirety of the messages being sent, but once in a while, the connection would terminate without any obvious, for me, reason. Setting the buffer to 0 resolved the issue.
@@ -153,4 +156,4 @@ There seems to be an occurrence where the WebSocket connection terminates on its
 - https://stackoverflow.com/questions/30904560/libwebsocket-client-example
 - https://finnhub.io/docs/api/library
 - https://github.com/Finnhub-Stock-API/finnhub-python
-- 
+- https://chatgpt.com
