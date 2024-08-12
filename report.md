@@ -2,6 +2,7 @@
 In this assignment, we are going to be opening a WebSocket connection to receive and process stock and crypto data. We are going to be keeping track of the following stocks:
 - Invidia,
 - Google
+
 and the following crypto:
 - Bitcoin,
 - Ethereum.
@@ -109,7 +110,7 @@ Steps 1 and 2 are considered the handshake procedure and in our case, we subscri
 Let's translate the previously stated WebSocket theory into actual c code.
 The gist of the program's logic is within the WebSocket service callback function. A callback function is designed to be called by another function. In our case, this stands true as it gets called on different occasions:
 - When creating the context of the connection the protocols array is passed as a parameter. This array contains, among others, the callback function. 
-- And every time the main while loop comes around in order for the WebSocket to continue serving its purpose. Specifically, this function utilizes it: lws_service(context, 500).
+- And every time the main while loop comes around to ensure that the WebSocket continues serving its purpose. Specifically, this function utilizes it: lws_service(context, 500).
 
 The aforementioned callback function contains all the possible cases a connection needs:
 - The Client established a connection
@@ -156,4 +157,6 @@ There seems to be an occurrence where the WebSocket connection terminates on its
 - https://stackoverflow.com/questions/30904560/libwebsocket-client-example
 - https://finnhub.io/docs/api/library
 - https://github.com/Finnhub-Stock-API/finnhub-python
+- https://www.youtube.com/watch?v=SoGsKI_nrYU&t=35s
+- https://jensd.be/1126/linux/cross-compiling-for-arm-or-aarch64-on-debian-or-ubuntu
 - https://chatgpt.com

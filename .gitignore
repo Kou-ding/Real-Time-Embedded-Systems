@@ -1,2 +1,3 @@
 # Ignore the virtual environment
 python_websockets/my_venv/
+libwebsockets/
