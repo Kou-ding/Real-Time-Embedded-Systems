@@ -7,11 +7,11 @@
 CC=gcc
 CROSSCC=aarch64-none-linux-gnu-gcc
 # Compiler flags
-CFLAGS=-Wall -pthread
+CFLAGS=-Wall -pthread -I./libwebsockets/include
 # Linker flags
 LDFLAGS=-lwebsockets -lcrypto -lssl -lz -ljansson
 # CrossCompiling-linker flags
-CROSSLDFLAGS=-static -lwebsockets -lcrypto -lssl -lz -ljansson 
+CROSSLDFLAGS=-static -lwebsockets -lcrypto -lssl -lz -ljansson
 
 # all is the default action in makefiles
 all: websockets
