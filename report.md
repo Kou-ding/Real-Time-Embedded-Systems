@@ -143,15 +143,23 @@ The plots we get after 2 hours are as follows:
 ![NVDAplot](md-media/NVDA_delays_plot.png)
 ![GOOGLplot](md-media/GOOGL_delays_plot.png)
 
-> Most of the results are processed in less than 5ms. There are some outliers but that could be attributed to high infux of data meaning that the production speed mementarily exceeds greatly the consumption speed.
+Most of the results are processed in less than 5ms. There are some outliers but that could be attributed to high infux of data meaning that the production speed mementarily exceeds greatly the consumption speed.
 
 #### CPU Idle Percentage
 The second benchmark we are going to perform involves calculating how much of the time the CPU remains idle awaiting trades to appear inside the individual queues to process them. Longer CPU idling plays a huge role in keeping the program energy efficient, allowing it to function for prolonged periods without the need for a constant supply of power. Thus the system can very well function through an integrated battery.
 
-Here are some measurements of CPU Idle Percentage:
+Here are some measurements of the CPU Idle Percentage for reference:
 |Execution time|CPU Idle %|
 |--------------|----------|
-|13845.7241s|77.6013%|
+|312.8130 seconds|89.9085%|
+|610.9161 seconds|99.8574%|
+|1187.7881 seconds|74.2154%|
+|1975.7935 seconds|99.9589%|
+|13845.7241 seconds|77.6013%|
+
+As we see the majority of the time the processor remains idle, waiting for the trade data to come through. The percentage may vary depending on external factors but there doesn't seem to be any correlation between execution time and CPU idle time.
+
+> Note that the production CPU time, where we pass the JSON data to our individual queues, was considered insignificant and was left out.
 
 
 ### Observations | Part 4

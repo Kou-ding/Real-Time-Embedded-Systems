@@ -24,7 +24,7 @@ ssh username@IP
 
 ### Cross-compiling on arm processors
 #### Part 1
-Visit the arm gnu toolchain website: [link1](https://developer.arm.com/downloads/-/gnu-a) or the musl website [link2](https://musl.cc/). Both contain toolchains that allow us to cross-compile. Musl has the benefit of not needing to link everything with glibc so it is preferred.
+Visit the arm gnu toolchain website: [link1](https://developer.arm.com/downloads/-/gnu-a) or the musl website: [link2](https://musl.cc/). Both contain toolchains that allow us to cross-compile. Musl has the benefit of not needing to link everything with glibc so it is preferred.
 
 #### Part 2
 Find out the configuration of both your main and host machine by typing:
