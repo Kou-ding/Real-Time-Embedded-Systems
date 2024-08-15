@@ -1,5 +1,5 @@
 ### Introduction
-This is a tutorial on how to set up cross-compilation. Our main machine, where we are going to be developing on, can be any Linux machine and the executable should be able to run on a Raspberry Pi.
+This is a tutorial on how to set up cross-compilation. We are going to be building our project on an x86_64 Linux machine and the executable should be able to run on a Raspberry Pi aarch64.
 
 ### Connect to Pi via SSH
 #### Part 1
@@ -24,7 +24,7 @@ ssh username@IP
 
 ### Cross-compiling on arm processors
 #### Part 1
-Visit the arm gnu toolchain website: [link](https://developer.arm.com/downloads/-/gnu-a)
+Visit the arm gnu toolchain website: [link1](https://developer.arm.com/downloads/-/gnu-a) or the musl website [link2](https://musl.cc/). Both contain toolchains that allow us to cross-compile. Musl has the benefit of not needing to link everything with glibc so it is preferred.
 
 #### Part 2
 Find out the configuration of both your main and host machine by typing:
@@ -59,15 +59,17 @@ int main() {
 #### Part 5
 Compile it using the downloaded tools:
 ```bash
-#cross-compiler from linux x86_64 to pi400
-aarch64-none-linux-gnu-gcc file.c -o file
+#cross-compiler from linux x86_64 to aarch64
+aarch64-linux-musl-gcc file.c -o file -static
 ```
 
 #### Part 6
 Finally, the last step is to transfer this file to our raspberry pi:
 ```bash
-scp /path/to/file/on/main/machine username@hostname:/path/to/copy/to/on/host
-./file #to run the executable
+# copy the executable
+scp /path/to/file/on/build/machine username@hostname:/path/to/copy/to/on/host/machine
+# run the executable
+./file
 ```
 
 ### Advanced cross-compilation
@@ -81,36 +83,53 @@ The difference between the two is that in static linking the dependencies are in
 #### Part 2
 Aiming to integrate the necessary libraries inside the executable, we build the libraries by ourselves. First, we acquire the source files.
 ```bash
+#jansson
+git clone git@github.com:akheron/jansson.git
+
 #zlib
-wget https://zlib.net/current/zlib.tar.gz
-mkdir zlib && mv zlib.tar.gz zlib
-cd zlib
-tar -xf zlib.tar.gz
+git clone git@github.com:madler/zlib.git
 
 #openssl
 git clone git@github.com:openssl/openssl.git
 
 #libwebsockets
-git clone https://libwebsockets.org/repo/libwebsockets
+git clone git@github.com:warmcat/libwebsockets.git
 
 ```
 
 #### Part 3
-Now we have to build each library based on the host system (Raspberry Pi). This is done by: 
-- openssl
+Now we have to build each library based on the host system (Raspberry Pi). The following scripts go through configuring, making and installing our dependencies.
+
+- jansson
 ```bash
-# when inside the openssl directory
-CC=/home/kou/coding/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-gcc ./Configure linux-aarch64 --prefix=/home/kou/coding/Real-Time-Embedded-Systems/openssl --openssldir=/home/kou/coding/Real-Time-Embedded-Systems/openssl LDFLAGS="-static"
-make 
-sudo make install
+sudo dnf install libtool
+autoupdate 
+autoreconf -fi
+CC=/home/kou/coding/Real-Time-Embedded-Systems/musl/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc ./configure --build x86_64-pc-linux-gnu --host aarch64-linux-gnu --prefix /home/kou/coding/Real-Time-Embedded-Systems/jansson-build LDFLAGS="-static"
+# make
+make
+# install 
+make install
 ```
 
 - zlib
 ```bash
 # when inside the zlib directory
-CC=/home/kou/coding/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-gcc ./configure --static --prefix=/home/kou/coding/Real-Time-Embedded-Systems/zlib
-make 
-sudo make install
+CC=/home/kou/coding/Real-Time-Embedded-Systems/musl/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc ./configure --build x86_64-pc-linux-gnu --host aarch64-linux-gnu --prefix /home/kou/coding/Real-Time-Embedded-Systems/zlib-build LDFLAGS="-static"
+# make
+make
+# install 
+make install
+```
+
+- openssl
+```bash
+# when inside the openssl directory
+CC=/home/kou/coding/Real-Time-Embedded-Systems/musl/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc ./Configure linux-aarch64 --prefix=/home/kou/coding/Real-Time-Embedded-Systems/openssl-build no-shared -fPIC
+# make
+make
+# install
+make install
 ```
 
 - libwebsockets
@@ -122,20 +141,49 @@ cd build
 # its purpose is better readability
 cmake .. \
 -DCMAKE_SYSTEM_NAME=Linux \
--DCMAKE_C_COMPILER=/home/kou/coding/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-gcc \
--DCMAKE_CXX_COMPILER=/home/kou/coding/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-g++ \
--DOPENSSL_ROOT_DIR=/home/kou/coding/Real-Time-Embedded-Systems/openssl \
--DOPENSSL_LIBRARIES=/home/kou/coding/Real-Time-Embedded-Systems/openssl/lib \
--DOPENSSL_INCLUDE_DIR=/home/kou/coding/Real-Time-Embedded-Systems/openssl/include \
+-DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+-DCMAKE_C_COMPILER=/home/kou/coding/Real-Time-Embedded-Systems/musl/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc \
+-DCMAKE_CXX_COMPILER=/home/kou/coding/Real-Time-Embedded-Systems/musl/aarch64-linux-musl-cross/bin/aarch64-linux-musl-g++ \
+-DCMAKE_FIND_ROOT_PATH="/home/kou/coding/Real-Time-Embedded-Systems/musl/aarch64-linux-musl-cross/aarch64-linux-musl;/home/kou/coding/Real-Time-Embedded-Systems/openssl-build;/home/kou/coding/Real-Time-Embedded-Systems/zlib-build" \
 -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
 -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
 -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
 -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
--DCMAKE_INSTALL_PREFIX=/home/kou/coding/Real-Time-Embedded-Systems/libwebsockets \
--DLWS_WITH_STATIC=ON \
+-DCMAKE_INSTALL_PREFIX=/home/kou/coding/Real-Time-Embedded-Systems/libwebsockets-build \
+-DLWS_WITH_SSL=ON \
+-DLWS_WITHOUT_TESTAPPS=ON \
+-DLWS_WITHOUT_TEST_SERVER=ON \
+-DLWS_WITHOUT_TEST_CLIENT=ON \
+-DLWS_WITHOUT_EXTENSIONS=ON \
+-DOPENSSL_ROOT_DIR=/home/kou/coding/Real-Time-Embedded-Systems/openssl-build \
+-DOPENSSL_INCLUDE_DIR=/home/kou/coding/Real-Time-Embedded-Systems/openssl-build/include \
+-DOPENSSL_CRYPTO_LIBRARY=/home/kou/coding/Real-Time-Embedded-Systems/openssl-build/lib/libcrypto.a \
+-DOPENSSL_SSL_LIBRARY=/home/kou/coding/Real-Time-Embedded-Systems/openssl-build/lib/libssl.a \
+-DOPENSSL_USE_STATIC_LIBS=TRUE \
+-DZLIB_ROOT=/home/kou/coding/Real-Time-Embedded-Systems/zlib-build \
+-DZLIB_LIBRARY=/home/kou/coding/Real-Time-Embedded-Systems/zlib-build/lib/libz.a \
+-DZLIB_INCLUDE_DIR=/home/kou/coding/Real-Time-Embedded-Systems/zlib-build/include \
 -DLWS_WITH_SHARED=OFF
-
+# make
 make
-
+# install 
 make install
 ```
+
+#### Step 4 
+Lastly, we link them inside the makefile to statically produce a program that runs on the host machine.
+
+```makefile
+CROSSLDFLAGS=-static \
+-I/home/kou/coding/Real-Time-Embedded-Systems/libwebsockets-build/include \
+-I/home/kou/coding/Real-Time-Embedded-Systems/jansson-build/include \
+-I/home/kou/coding/Real-Time-Embedded-Systems/openssl-build/include \
+-I/home/kou/coding/Real-Time-Embedded-Systems/zlib-build/include \
+-L/home/kou/coding/Real-Time-Embedded-Systems/libwebsockets-build/lib \
+-L/home/kou/coding/Real-Time-Embedded-Systems/jansson-build/lib \
+-L/home/kou/coding/Real-Time-Embedded-Systems/openssl-build/lib \
+-L/home/kou/coding/Real-Time-Embedded-Systems/zlib-build/lib \
+-lwebsockets -lssl -lcrypto -lz -ljansson -ldl
+```
+
+The full Makefile is inside the repository for further reference.

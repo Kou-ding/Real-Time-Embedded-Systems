@@ -157,6 +157,11 @@ There seems to be an occurrence where the WebSocket connection terminates on its
 - https://stackoverflow.com/questions/30904560/libwebsocket-client-example
 - https://finnhub.io/docs/api/library
 - https://github.com/Finnhub-Stock-API/finnhub-python
+- https://github.com/warmcat/libwebsockets
+- https://github.com/openssl/openssl
+- https://github.com/akheron/jansson
+- https://jansson.readthedocs.io/en/latest/gettingstarted.html#compiling-and-installing-jansson
 - https://www.youtube.com/watch?v=SoGsKI_nrYU&t=35s
 - https://jensd.be/1126/linux/cross-compiling-for-arm-or-aarch64-on-debian-or-ubuntu
+- https://musl.cc/aarch64-linux-musl-cross.tgz
 - https://chatgpt.com

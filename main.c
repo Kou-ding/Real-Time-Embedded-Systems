@@ -212,8 +212,6 @@ int main(void){
     clientConnectionInfo.context = context;
     if (lws_parse_uri(inputURL, &urlProtocol, &clientConnectionInfo.address,
                     &clientConnectionInfo.port, &urlTempPath)){
-        // nothing
-    }else{
         printf("Couldn't parse the URL\n");
     }
 
@@ -283,7 +281,7 @@ int main(void){
     for (int i = 0; i < NUM_THREADS; i++) {
         total_idle_time += idle_time[i];
     }
-    printf(KBRN"[Main] CPU Idle Percentage: %.4f.\n"RESET, (total_idle_time / (total_execution_time * NUM_THREADS))*100);
+    printf(KBRN"[Main] CPU Idle Percentage: %.4f%%.\n"RESET, (total_idle_time / (total_execution_time * NUM_THREADS))*100);
     // Destroy the websocket connection
     lws_context_destroy(context);
 
@@ -298,11 +296,6 @@ int main(void){
     // Destroy the queues
     for (int i = 0; i < NUM_THREADS; i++) {
         queueDelete(queues[i]);
-    }
-
-    // Free the delay array
-    for (int i = 0; i < NUM_THREADS; i++) {
-        free_delay_array(i);
     }
     return 0;
 }
