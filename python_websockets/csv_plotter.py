@@ -8,9 +8,9 @@ csv_directory = '../delays'  # Change this to your directory
 # List of CSV filenames to process
 csv_filenames = [
     'BINANCE:BTCUSDT_delays.csv',
-    'BINANCE:ETHUSDT_delays.csv'#,
-   #'NVDA_delays.csv',
-   #'GOOGL_delays.csv' 
+    'BINANCE:ETHUSDT_delays.csv',
+    'NVDA_delays.csv',
+    'GOOGL_delays.csv' 
 ]
 
 # Iterate over each CSV file

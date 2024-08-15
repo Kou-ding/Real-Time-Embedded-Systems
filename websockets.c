@@ -21,11 +21,9 @@
 #define RESET "\033[0m" //Reset
 
 //Number of threads which is also the number of symbols
-#define NUM_THREADS 2
+#define NUM_THREADS 4
 //Queue size
 #define QUEUESIZE 200
-// Delay array size 
-#define DELAYSIZE 1000
 
 struct timespec start, end;
 
@@ -85,8 +83,6 @@ void write_delay_to_file(const char* symbol, double delay);
 // Clear the contents of a file
 void clear_file(const char* filename);
 
-
-
 //This array defines the protocols used in the websocket
 static struct lws_protocols protocols[]={
 	{
@@ -134,8 +130,8 @@ int main(void){
     // Initialize the trades array with symbols
     strcpy(trades[0].symbol, "BINANCE:BTCUSDT");
     strcpy(trades[1].symbol, "BINANCE:ETHUSDT");
-    //strcpy(trades[2].symbol, "NVDA");
-    //strcpy(trades[3].symbol, "GOOGL");
+    strcpy(trades[2].symbol, "NVDA");
+    strcpy(trades[3].symbol, "GOOGL");
     
     // Clear the contents of the log files
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -188,7 +184,8 @@ int main(void){
     info.port = CONTEXT_PORT_NO_LISTEN; 
     info.protocols = protocols; 
     info.gid = -1; 
-    info.uid = -1; 
+    info.uid = -1;
+    info.ssl_ca_filepath = "/etc/ssl/certs/ca-certificates.crt"; 
     info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
     info.max_http_header_pool = 1024; // Increase if necessary
     info.pt_serv_buf_size = 4096; // Default is 4096 bytes, increase buffer size to 16 KB if needed 16384 bytes

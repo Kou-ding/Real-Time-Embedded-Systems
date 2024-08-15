@@ -79,8 +79,12 @@ Now that we know how Finnhub works and what kind of data it provides we need to 
 Then, we need to install a library that will help us subscribe to certain market symbols, effectively listening to the current market's activity for certain stocks and/or cryptos.
 For Debian-based distributions, the command to install the WebSocket library is as follows:
 ```bash
-#to get the library via your distro's package manager
+# to get the library via your distro's package manager
+# Debian
 sudo apt install libwebsockets-dev
+# Fedora
+sudo dnf install libwebsocket-devel
+
 ```
 or
 ```bash
@@ -134,10 +138,12 @@ Finally, we need to parallelize the c code using p threads so that we meet the r
 Along with the other text files we instruct the consumer threads to store the delay times, between the time a trade data was inserted into the queue and the time it was processed, inside a CSV file. Then, we can later on run a Python script to process and graph the delay times for each symbol. This benchmark tells us how real-time the calculations we do really are.
 
 The plots we get after 2 hours are as follows:
-![BTC Plot](path/to/second-image.png)
-![ETH Plot](path/to/second-image.png)
-![NVDA Plot](path/to/second-image.png)
-![GOOGL Plot](path/to/second-image.png)
+![BTCplot](md-media/BINANCE:BTCUSDT_delays_plot.png)
+![ETHplot](md-media/BINANCE:ETHUSDT_delays_plot.png)
+![NVDAplot](md-media/NVDA_delays_plot.png)
+![GOOGLplot](md-media/GOOGL_delays_plot.png)
+
+> Most of the results are processed in less than 5ms. There are some outliers but that could be attributed to high infux of data meaning that the production speed mementarily exceeds greatly the consumption speed.
 
 #### CPU Idle Percentage
 The second benchmark we are going to perform involves calculating how much of the time the CPU remains idle awaiting trades to appear inside the individual queues to process them. Longer CPU idling plays a huge role in keeping the program energy efficient, allowing it to function for prolonged periods without the need for a constant supply of power. Thus the system can very well function through an integrated battery.
@@ -145,13 +151,15 @@ The second benchmark we are going to perform involves calculating how much of th
 Here are some measurements of CPU Idle Percentage:
 |Execution time|CPU Idle %|
 |--------------|----------|
-|
+|13845.7241s|77.6013%|
+
 
 ### Observations | Part 4
 When setting up the protocol array I originally set the buffer size at 1000. This allowed me to read the entirety of the messages being sent, but once in a while, the connection would terminate without any obvious, for me, reason. Setting the buffer to 0 resolved the issue.
 
-There seems to be an occurrence where the WebSocket connection terminates on its own around the 2-hour mark. The connection flag remains 1, indicating that the connection is still open when in reality we are not receiving any data. This makes it difficult for us to attempt a reconnection since there isn't any variable that can inform us that the connection has been disrupted.
+There seems to be an occurrence where the WebSocket connection terminates on its own after a couple of hours. The connection flag remains 1, indicating that the connection is still open when in reality we are not receiving any data. This makes it difficult for us to attempt a reconnection since there isn't any variable that can inform us that the connection has been disrupted.
 
+Specifying the SSL certificate file was not necessary when running the program natively. However, when it comes to cross-compilation the executable appeared to struggle to find the certificate. That is why we needed to add the host's SSL certificate directory to the context creation info. 
 
 ### Sources
 - https://stackoverflow.com/questions/30904560/libwebsocket-client-example

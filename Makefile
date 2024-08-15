@@ -26,10 +26,10 @@ CROSSLDFLAGS=-static \
 all: websockets
 
 # the main program
-websockets: main.c 
+websockets: websockets.c 
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 # the main program for the embedded system (raspberry pi)
-embedded: main.c
+embedded: websockets.c
 	$(CROSSCC) $(CROSSCFLAGS) $^ -o $@ $(CROSSLDFLAGS)
 # the websocket test program
 wstest: wstest.c
@@ -44,8 +44,8 @@ hello: hello.c
 # Cleanup functionality
 clean:
 	rm -f websockets embedded wstest ptest hello
-	rm -f logs/*.txt 
-	rm -f candlesticks/*.txt 
-	rm -f averages/*.txt
-	rm -f delays/*.csv
+	rm -f logs/*
+	rm -f candlesticks/*
+	rm -f averages/*
+	rm -f delays/*
 	rm -f python_websockets/*.png
