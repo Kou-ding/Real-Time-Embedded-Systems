@@ -1,60 +1,31 @@
-### Introduction
-In this assignment, we are going to be opening a WebSocket connection to receive and process stock and crypto data. We are going to be keeping track of the following stocks:
-- Invidia,
-- Google
+# Real-time embedded systems assignment
+Name:   
+AEM:   
+GitHub repository: [https://github.com/Kou-ding/Real-Time-Embedded-Systems](https://github.com/Kou-ding/Real-Time-Embedded-Systems)
 
-and the following crypto:
+## **Introduction**
+In this assignment, we are going to be opening a WebSocket connection to receive and process stock and crypto data. We are going to be keeping track of the following stocks and crypto alike:
+- Invidia,
+- Google,
 - Bitcoin,
-- Ethereum.
+- Ethereum.  
 
 Stocks and crypto have differing operating hours and that is why I chose to incorporate, in addition to stocks that are exchanged on normal stock market hours, two very popular cryptocurrencies that are being exchanged 24/7. This setup will provide us with a constant influx of sufficient data to process.
 
-### Assignment Requirements
-Log all past stock exchanges in a separate file for each stock respectively.
-
-Every minute compute the (candlestick):
-- first value
-- last value
-- max value
-- min value
-- total volume
-- the moving mean value of the exchanges of the last 15 minutes.
-
-The report should be 4 pages containing:
-- the implementation method
-- a diagram of the time differences
-- a diagram of the percentage of the time the CPU remains idle 
-- comments and results that show that the program can function for days writing data without losses and without stopping if something happens to the connection or the network.
-
-### WebSockets & Python | Part 1
+## **WebSockets & Python | Part 1**
 
 #### Finnhub account
 First, we have to make an account in [Finnhub](https://finnhub.io) so that we can get an API key. Finnhub is a financial API organized around REST and the key it gives us is used to authenticate our specific requests.
 
 #### Python example
 To test the functionality of the web socket we run a Python script after activating the correct environment that contains the necessary dependencies.
-```bash
-# To create a virtual environment
-sudo python3 -m venv vwebsockets
-# To activate the virtual environment
-source vwebsockets/bin/activate
-# Installing the necessary dependencies
-pip install websocket finnhub-python websocket-client
-# To deactivate it
-deactivate
-# To run the code
-python3 finnhub.py
-```
+
 What we receive for currently traded markets (in our case: Bitcoin) is:
 ```
-++Rcv raw: b'\x81~\x03\x0f{"data":[{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.01559},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.00008},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.0001},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.02423},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886261,"v":0.00011},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886418,"v":0.00084},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00746},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00149},{"c":null,"p":66972.78,"s":"BINANCE:BTCUSDT","t":1721555886860,"v":0.0208},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886950,"v":0.00122}],"type":"trade"}'
-
-++Rcv decoded: fin=1 opcode=1 data=b'{"data":[{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.01559},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.00008},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.0001},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.02423},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886261,"v":0.00011},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886418,"v":0.00084},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00746},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886721,"v":0.00149},{"c":null,"p":66972.78,"s":"BINANCE:BTCUSDT","t":1721555886860,"v":0.0208},{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886950,"v":0.00122}],"type":"trade"}
+++Rcv decoded: fin=1 opcode=1 data=b'{"data":[{"c":null,"p":66972.77,"s":"BINANCE:BTCUSDT","t":1721555886208,"v":0.01559}],"type":"trade"}
 ```
 What we receive for not-currently traded markets (in our case: Apple) is:
 ```
-++Rcv raw: b'\x81\x0f{"type":"ping"}'
-
 ++Rcv decoded: fin=1 opcode=1 data=b'{"type":"ping"}'
 {"type":"ping"}
 ```
@@ -71,34 +42,14 @@ The trade information being provided has this form:
 - t: unix milliseconds timestamp,
 - c: list of trade conditions
 
-### Websockets & C lang | Part 2
+## **Websockets & C lang | Part 2**
 Now that we know how Finnhub works and what kind of data it provides we need to do the same thing but in C and parallelize the process using pthreads.
 
-> Note: The code has a lot of comments that go into more specific parts of the application.
+> Note: The code has a lot of comments that go into the nuance of all the topics that could't make the cut to be included inside the report.
 
 #### Installing web sockets C library
 At this point, we need to install a library (libwebsockets) that will help us subscribe to certain market symbols. This is a functionality provided by the Finnhub API, effectively allowing us to listen to the current market's activity for certain stocks and/or cryptos.
-For Debian-based distributions, the command to install the WebSocket library is as follows:
-```bash
-# to get the library via your distro's package manager
-# Debian
-sudo apt install libwebsockets-dev
-# Fedora
-sudo dnf install libwebsocket-devel
-
-```
-or
-```bash
-#to build the library yourself
-git clone https://libwebsockets.org/repo/libwebsockets
-cd libwebsockets
-mkdir build
-cd build
-cmake ..
-make
-sudo make install
-```
-Usually building it yourself guarantees that the latest version of the library is being utilized.
+> The dependencies installation process is different in native compiling and cross compiling. For a detailed tutorial on cross-compilation check the cross-compile.md file inside the GitHub repository.
 
 #### Understanding Web Sockets
 The C implementation helps us understand the fundamentals of a web socket connection. These are as follows:
@@ -134,7 +85,7 @@ Finally, we need to parallelize the c code using p threads so that we meet the r
 
 We utilize a mutex so that only one thread can give or take from the queue at a particular moment in time. Finally, we set some variable arrays, that have as many elements as there are threads, so that we can have unique, to each symbol, variables for each thread to work with and calculate times, values and everything that is needed.
 
-### Results | Part 3
+## **Results | Part 3**
 
 #### Enqueue / Dequeue Delay
 Along with the other text files we instruct the consumer threads to store the delay times, between the time a trade data was inserted into the queue and the time it was processed, inside a CSV file. Then, we can later on run a Python script to process and graph the delay times for each symbol. This benchmark tells us how real-time the calculations we do really are.
@@ -164,14 +115,16 @@ As we see the majority of the time the processor remains idle, waiting for the t
 
 > Note that the production CPU time, where we pass the JSON data to our individual queues, was considered insignificant and was left out.
 
-### Observations | Part 4
+
+## **Observations | Part 4**
 When setting up the protocol array I originally set the buffer size at 1000. This allowed me to read the entirety of the messages being sent, but once in a while, the connection would terminate without any obvious, for me, reason. Setting the buffer to 0 resolved the issue.
 
 There seems to be an occurrence where the WebSocket connection terminates on its own after a couple of hours. The connection flag remains 1, indicating that the connection is still open when in reality we are not receiving any data. This makes it difficult for us to attempt a reconnection since there isn't any variable that can inform us that the connection has been disrupted.
 
 Specifying the SSL certificate file was not necessary when running the program natively. However, when it comes to cross-compilation the executable appeared to struggle to find the certificate. That is why we needed to add the host's SSL certificate directory to the context creation info. 
 
-### Sources
+**Sources**
+-----------------------------------------------------
 - https://stackoverflow.com/questions/30904560/libwebsocket-client-example
 - https://finnhub.io/docs/api/library
 - https://github.com/Finnhub-Stock-API/finnhub-python
@@ -183,3 +136,4 @@ Specifying the SSL certificate file was not necessary when running the program n
 - https://jensd.be/1126/linux/cross-compiling-for-arm-or-aarch64-on-debian-or-ubuntu
 - https://musl.cc/aarch64-linux-musl-cross.tgz
 - https://chatgpt.com
+
